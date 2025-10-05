@@ -18,13 +18,13 @@ public class AdminController {
         this.userRepository = userRepository;
     }
 
-    // Összes felhasználó lekérése (csak ADMIN)
+    // Összes felhasználó lekérése CSAK ADMIN jogosultsággal
     @GetMapping("/users")
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
-    // Egy user törlése ID alapján (csak ADMIN)
+    // Egy user törlése ID alapján CSAK ADMIN jogosultsággal
     @DeleteMapping("/users/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         if (userRepository.existsById(id)) {
@@ -34,7 +34,7 @@ public class AdminController {
         return ResponseEntity.notFound().build();
     }
 
-    // User szerepkör módosítása (csak ADMIN)
+    // User szerepkör módosítása CSAK ADMIN jogosultsággal
     @PutMapping("/users/{id}/role")
     public ResponseEntity<User> updateUserRole(
             @PathVariable Long id,
@@ -42,7 +42,7 @@ public class AdminController {
     ) {
         return userRepository.findById(id)
                 .map(user -> {
-                    user.setRole(role);   // Role enum érték
+                    user.setRole(role);   // Role enum értéke
                     return ResponseEntity.ok(userRepository.save(user));
                 })
                 .orElse(ResponseEntity.notFound().build());
