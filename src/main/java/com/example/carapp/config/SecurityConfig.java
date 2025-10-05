@@ -43,12 +43,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
 
-                        // Publikus olvasás (ha így szeretnéd)
+                        // Publikus olvasás
                         .requestMatchers(HttpMethod.GET, "/api/cars").permitAll()
 
                         // Admin végpontok
                         .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
-                        // ha inkább hasRole-t használsz, akkor a GrantedAuthority legyen "ROLE_ADMIN"
 
                         // Autók / időpontok – a többi művelethez auth kell
                         .requestMatchers("/api/cars/**").authenticated()
@@ -57,7 +56,8 @@ public class SecurityConfig {
                         // Users
                         .requestMatchers("/api/users/**").authenticated()
 
-                        // Fórum: olvasás publikus, írás auth
+                        // Fórum: olvasás publikus, szerkesztés beléptetett felhasználók számára
+
                         .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/forum/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()

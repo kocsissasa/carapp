@@ -21,10 +21,10 @@ public class DataSeeder {
                                ServiceAppointmentRepository apptRepo,
                                PasswordEncoder passwordEncoder) {
         return args -> {
-            // csak ha még nincsenek felhasználók
+            // Ha nincsenek mentve felhasználók az adatbázisba..akkor feltölti az alábbi példa adatokkal
             if (userRepo.count() > 0) return;
 
-            // --- USERS (mind ADMIN, kérésed szerint) ---
+            // --- Felhasználók minta ---
             User anna  = new User("Anna",  "anna@example.com",  passwordEncoder.encode("titok123"), Role.ADMIN);
             User apa   = new User("Apa",   "apa@example.com",   passwordEncoder.encode("titok123"), Role.ADMIN);
             User toldi = new User("Toldi", "toldi@example.com", passwordEncoder.encode("titok123"), Role.ADMIN);
@@ -32,7 +32,7 @@ public class DataSeeder {
 
             userRepo.saveAll(List.of(anna, apa, toldi, adzam));
 
-            // --- CARS ---
+            // --- Autók minta ---
             Car corsa = new Car("Opel", "Corsa D", 2008, anna);
             Car eklass = new Car("Mercedes", "E-Class", 2006, apa);
             Car vectra = new Car("Opel", "Vectra B2", 1999, toldi);
@@ -40,7 +40,7 @@ public class DataSeeder {
 
             carRepo.saveAll(List.of(corsa, eklass, vectra, golf4));
 
-            // --- APPOINTMENTS (minta) ---
+            // --- Foglalás minta ---
             ServiceAppointment a1 = new ServiceAppointment();
             a1.setUser(anna);
             a1.setCar(corsa);
