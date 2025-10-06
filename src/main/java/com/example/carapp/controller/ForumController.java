@@ -22,6 +22,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+
+/**
+ * Ez kezeli a fórumhoz kapcsolódó végpontokat
+ * CRUD műveletek
+ * Kommentek
+ * Jogosultságok (Olvasni bárki tudja, posztolni beléptetett felhasználó, ADMIN mindent tud)
+ */
 @RestController
 @RequestMapping("/api/forum")
 public class ForumController {
@@ -67,6 +74,7 @@ public class ForumController {
         return res.map(this::toPostResponse);
     }
 
+// Konkrét poszt lekérése ID alapján
     @GetMapping("/posts/{id}")
     public ResponseEntity<PostResponse> getPost(@PathVariable Long id) {
         Optional<Post> opt = postRepo.findById(id);
@@ -75,7 +83,11 @@ public class ForumController {
         }
         return ResponseEntity.ok(toPostResponse(opt.get()));
     }
-
+/**
+ * --- Új poszt létrehozása ---
+ *  Auth szükséges
+ *  Mentés után CREATED (201) státuszt ad vissza
+ */
     @PostMapping("/posts")
     public ResponseEntity<PostResponse> createPost(@Valid @RequestBody PostRequest req, Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
@@ -98,7 +110,9 @@ public class ForumController {
         Post saved = postRepo.save(p);
         return ResponseEntity.status(HttpStatus.CREATED).body(toPostResponse(saved));
     }
-
+    /** --- Poszt módosítása ---
+    *   Csak a tulajdonos vagy az ADMIN teheti meg
+    */
     @PutMapping("/posts/{id}")
     public ResponseEntity<PostResponse> updatePost(@PathVariable Long id,
                                                    @Valid @RequestBody PostRequest req,
@@ -132,6 +146,9 @@ public class ForumController {
         return ResponseEntity.ok(toPostResponse(postRepo.save(p)));
     }
 
+    /** --- Poszt törlése---
+     *   Csak a tulajdonos vagy az ADMIN teheti meg
+     */
     @DeleteMapping("/posts/{id}")
     public ResponseEntity<Void> deletePost(@PathVariable Long id, Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {

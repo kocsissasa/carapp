@@ -14,6 +14,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.util.List;
 
+/**
+ * Ez az osztály kezeli a felhasználók CRUD műveleteit.
+ * DTO-k (UserRequest, UserResponse)  dolgozik,
+ * jelszó nem kerül visszaadásra.
+ */
+
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -26,7 +32,12 @@ public class UserController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // CREATE -> 201 Created
+    /**
+     * New user létrehozása
+     * 201 created kóddal tér vissza
+     * jelszó hash-elése
+     */
+
     @PostMapping("")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest req,
                                                    UriComponentsBuilder uriBuilder) {
@@ -39,7 +50,7 @@ public class UserController {
         return ResponseEntity.created(location).body(UserMapper.toResponse(saved));
     }
 
-    // READ (összes) -> 200
+    // Az összes USER lekérése -> 200 OK
     @GetMapping("")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
         List<UserResponse> list = userRepository.findAll()
@@ -49,7 +60,7 @@ public class UserController {
         return ResponseEntity.ok(list);
     }
 
-    // READ (egy) -> 200 vagy 404
+    // ID alapján USER lekérése, ha OK -> 200 OK, ha nem található -> 404 Not Found
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
         return userRepository.findById(id)
@@ -57,7 +68,11 @@ public class UserController {
                 .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build());
     }
 
-    // UPDATE -> 200 vagy 404
+    /**
+     * USER adatainak módosítása
+     * ha jelszó csere is van, akkor újra hash-elés
+     * ha nem létezik -> 404 Not Found
+     */
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
                                                    @Valid @RequestBody UserRequest req) {
@@ -65,6 +80,8 @@ public class UserController {
                 .map(u -> {
                     u.setName(req.getName());
                     u.setEmail(req.getEmail());
+
+                    // jelszó csak akkor frissül, ha ténylegesen került létrehozásra új
                     if (req.getPassword() != null && !req.getPassword().isBlank()) {
                         u.setPassword(passwordEncoder.encode(req.getPassword()));
                     }
@@ -74,7 +91,7 @@ public class UserController {
                 .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build());
     }
 
-    // DELETE -> 204 vagy 404
+    // DELETE ID alapján -> 204,ha OK vagy 404, ha NOT Found
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         return userRepository.findById(id)

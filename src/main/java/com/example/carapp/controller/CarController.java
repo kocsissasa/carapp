@@ -12,6 +12,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ *  Autók CRUD műveleteit valósítja meg ez az osztály
+ *  ADMIN listázhatja az összes autót
+ *  USER csak a sajátját módosíthatja
+ *  Új autó hozzáadáshoz be kell loginolni
+ */
 @RestController
 @RequestMapping("/api/cars")
 public class CarController {
@@ -24,13 +30,13 @@ public class CarController {
         this.userRepository = userRepository;
     }
 
-    // Összes autó (pl. adminnak)
+    // Összes autó lekérése
     @GetMapping
     public List<Car> getAllCars() {
         return carRepository.findAll();
     }
 
-    // Egy autó ID alapján
+    // Egy konkrét autó lekérdezése ID alapján, ha nincs ilyen -> 404 Not Found
     @GetMapping("/{id}")
     public ResponseEntity<Car> getCarById(@PathVariable Long id) {
         return carRepository.findById(id)
@@ -39,6 +45,8 @@ public class CarController {
     }
 
     // SAJÁT autók (bejelentkezett user)
+    // 401 -> ha nincs Auth
+    // 400 -> nincs USER
     @GetMapping("/me")
     public ResponseEntity<List<Car>> myCars(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -65,7 +73,7 @@ public class CarController {
         return ResponseEntity.ok(carRepository.save(car));
     }
 
-    // Autó frissítése (csak a sajátját)
+    // Autó frissítése (csak sajátot)
     @PutMapping("/{id}")
     public ResponseEntity<Car> updateCar(@PathVariable Long id,
                                          @RequestBody Car updatedCar,
@@ -74,6 +82,7 @@ public class CarController {
         User owner = userRepository.findByEmail(email).orElse(null);
 
         return carRepository.findById(id).map(car -> {
+            // Csak sajátot lehet módosítani
             if (owner == null || !car.getOwner().getId().equals(owner.getId())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).<Car>build();
             }
@@ -92,6 +101,7 @@ public class CarController {
 
         return carRepository.findById(id)
                 .<ResponseEntity<Void>>map(car -> {
+                    // USER -> csak sajátot törölhet
                     if (owner == null || !Objects.equals(car.getOwner().getId(), owner.getId())) {
                         return ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build();
                     }
