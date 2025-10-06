@@ -4,6 +4,15 @@ import com.example.carapp.model.ForumCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * --- Új forum poszt létrehozásához vagy módosítására szolgáló DTO ---
+ *       Validáció:
+ *          - title: kötelező, max. 120 karakter
+ *          - content: kötelező, max. 5000 karakter
+ *          - category: ha nincs megadva, alapértelmezés = GENERAL
+ *          - rating: opcionális, pl. 1–5 skálán értékelés
+ */
+
 public class PostRequest {
     @NotBlank @Size(max = 120)
     private String title;

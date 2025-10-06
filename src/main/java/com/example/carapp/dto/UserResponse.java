@@ -1,5 +1,10 @@
 package com.example.carapp.dto;
 
+/*
+ * USER adatok lekéréséhez használt DTO (szerver → kliens).
+ * Jelszót NEM tartalmaz!
+ */
+
 public class UserResponse {
     private Long id;
     private String name;

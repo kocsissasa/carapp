@@ -4,6 +4,13 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/* Felhasználó létrehozásához vagy frissítéséhez használt DTO.
+*       Validáció:
+ *          - név: nem lehet üres
+ *          - email: érvényes formátum kötelező
+ *          - jelszó: min. 6 karakter
+ */
+
 public class UserRequest {
     @NotBlank(message = "Name cannot be empty")
     private String name;

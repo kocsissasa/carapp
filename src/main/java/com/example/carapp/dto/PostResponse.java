@@ -15,7 +15,14 @@ public class PostResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // getters/setters
+/// Fórumposzt adatainak megjelenítésére szolgáló DTO (szerver → kliens).
+/// Tartalmazza:
+///      - azonosító (id)
+///      - szerző adatai (id, név)
+///      - cím, tartalom, kategória
+///      - opcionális értékelés (rating)
+///      - létrehozás és módosítás ideje
+// getters/setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getAuthorId() { return authorId; }

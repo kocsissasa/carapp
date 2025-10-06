@@ -3,6 +3,14 @@ package com.example.carapp.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+/**
+ *  --- A bejelentkezéshez használt DTO ---
+ *      Email cím + jelszó szükséges
+ *      Validáció:
+ *          - Email formátum helyes legyen
+ *          - Nem lehet üres egyik mező sem
+ */
+
 public class LoginRequest {
 
     @Email(message = "Email must be valid")
