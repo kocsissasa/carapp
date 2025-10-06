@@ -1,7 +1,7 @@
 package com.example.carapp.model;
 
 public enum AppointmentStatus {
-    PENDING,
-    CONFIRMED,
-    CANCELLED
+    PENDING,    // Időpont lefoglalva, de még nincs jóváhagyva
+    CONFIRMED,  // Időpont jóváhagyva
+    CANCELLED   // Időpont törölve/lemondva
 }

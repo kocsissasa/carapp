@@ -7,6 +7,19 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 
+/*
+      --- Szervizidőpont foglalást reprezentál ---
+         Mezők:
+          id – elsődleges kulcs.
+          car – melyik autóra szól az időpont.
+          user – melyik felhasználó foglalta.
+          serviceDateTime – mikorra van foglalva (csak jövőbeli dátum lehet).
+          description – szerviz leírás (pl. olajcsere).
+          status – státusz (PENDING, CONFIRMED, CANCELLED).
+          createdAt – mikor jött létre a foglalás.
+          Kapcsolatok: minden foglalás tartozik egy autóhoz és egy userhez.
+*/
+
 @Entity
 @Table(name = "service_appointments")
 public class ServiceAppointment {

@@ -6,6 +6,17 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
+/*
+*   --- Fórum hozzászólás entitás ---
+*      Mezők:
+*         id – elsődleges kulcs.
+*         post – melyik poszthoz tartozik.
+*         author – a komment szerzője (User).
+*         content – hozzászólás szövege (max. 2000 karakter).
+*         createdAt – mikor jött létre.
+*         @ManyToOne kapcsolatok: minden komment egy Post-hoz és egy User-hez tartozik.
+ */
+
 @Entity
 @Table(name = "forum_comments")
 public class Comment {

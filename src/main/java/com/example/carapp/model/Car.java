@@ -4,6 +4,15 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+/*
+*    --- Egy autót reprezentál az adatbázisban ---
+*   Mezők:
+*       id – elsődleges kulcs.
+*       brand, model, year – kötelező adatok az autóról.
+*       owner – kapcsolat a felhasználóval (User), aki birtokolja az autót.
+*       Egy usernek több autója is lehet → @ManyToOne kapcsolat.
+ */
+
 @Entity
 @Table(name = "cars")
 public class Car {

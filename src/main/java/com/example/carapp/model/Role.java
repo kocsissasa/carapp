@@ -1,6 +1,6 @@
 package com.example.carapp.model;
 
 public enum Role {
-    USER,
-    ADMIN
+    USER,   // Alap felhasználó
+    ADMIN   // Adminisztrátor (több jogosultság)
 }

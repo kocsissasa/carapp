@@ -6,6 +6,16 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
+//      --- Fórum bejegyzés entitás ---
+// *       Mezők:
+// *           id – elsődleges kulcs.
+// *           author – a szerző (User).
+// *           title, content – poszt címe és tartalma.
+// *           category – a poszt kategóriája.
+// *           rating – opcionális értékelés (pl. szerviz tapasztalat).
+// *           createdAt, updatedAt – létrehozás és utolsó frissítés ideje.
+// *           Egy User több posztot is írhat.
+
 @Entity
 @Table(name = "forum_posts")
 public class Post {

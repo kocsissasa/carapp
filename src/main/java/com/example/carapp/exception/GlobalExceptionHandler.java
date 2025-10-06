@@ -11,10 +11,19 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import java.util.HashMap;
 import java.util.Map;
 
+// Ez egy globális hibakezelő osztály, ami a teljes alkalmazásra érvényes.
+
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1) Bean Validációs hibák ( @Valid )
+    /**
+     * 1) Bean Validációs hibák ( @Valid annotációval jelzett mezők )
+     * Példa: ha UserRequest-ben az email üres vagy nem valid,
+     * akkor MethodArgumentNotValidException keletkezik.
+     */
+
+
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
@@ -28,7 +37,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errors); // 400
     }
 
-    // 2) Adatbázis egyediség sértése (pl. email UNIQUE constraint)
+/**
+ * 2) Adatbázis integritási hiba (pl. UNIQUE constraint sérülés).
+ * Példa:: e-mail cím duplikáció.
+ */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> handleDuplicateEmail(DataIntegrityViolationException ex) {
         Map<String, String> body = new HashMap<>();

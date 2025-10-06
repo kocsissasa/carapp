@@ -6,6 +6,16 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+//  --- Felhasználót reprezentál ---
+//      Mezők:
+//          id, name, email, password – alap adatok.
+//          role – szerepkör (USER vagy ADMIN).
+//      Szabályok:
+//          email egyedi kell legyen.
+//          password minimum 6 karakter.
+//          @JsonProperty miatt a jelszó csak befelé megy, a response-okban nem jelenik meg.
+//          Egy felhasználónak több autója, több posztja és több kommentje is lehet.
+
 @Entity
 @Table(name = "users")
 public class User {
