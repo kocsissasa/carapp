@@ -1,5 +1,11 @@
 package com.example.carapp.dto;
 
+/**
+ * Login/Register után visszaadott objektum
+ * Tartalmazza a JWT tokent
+ * minden kérésnél Authorization headerben visszaküldi
+ */
+
 public class AuthResponse {
 
     private String token;

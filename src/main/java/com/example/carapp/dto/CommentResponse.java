@@ -2,6 +2,12 @@ package com.example.carapp.dto;
 
 import java.time.LocalDateTime;
 
+/**
+ * Komment lekéréséhez visszaadott DTO
+ * Tartalmazza a komment ID-ját, felhasználó adatait és a szöveget
+ * a createdAt mutatja a létrehozás dátumát
+ */
+
 public class CommentResponse {
     private Long id;
     private Long authorId;
