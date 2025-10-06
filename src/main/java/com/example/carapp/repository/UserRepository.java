@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
+//A JWT bejelentkezésnél kulcsfontosságú.
+//findByEmail → lekérdezi az adott e-mailhez tartozó usert.
+
 public interface UserRepository extends JpaRepository<User, Long> {
     // Email alapján keresés (JWT-es bejelentkezéshez kell)
     Optional<User> findByEmail(String email);

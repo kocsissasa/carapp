@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+//  Időpontfoglalásokhoz.
+//  Extra metódus: existsByCar_IdAndServiceDateTime → ellenőrzi, hogy adott autóra adott időpontban már van-e foglalás.
+
 public interface ServiceAppointmentRepository extends JpaRepository<ServiceAppointment, Long> {
     List<ServiceAppointment> findByUser(User user);
     List<ServiceAppointment> findByCar_Id(Long carId);

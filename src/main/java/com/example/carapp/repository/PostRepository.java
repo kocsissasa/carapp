@@ -6,6 +6,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+/*
+  Fórum posztokhoz.
+  Tud kategóriára, szerzőre és értékelésre szűrni.
+  Lapozás és rendezés támogatása
+*/
+
 public interface PostRepository extends JpaRepository<Post, Long> {
     Page<Post> findByCategory(ForumCategory category, Pageable pageable);
     Page<Post> findByAuthor_Id(Long authorId, Pageable pageable);
