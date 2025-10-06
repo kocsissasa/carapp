@@ -38,6 +38,17 @@ public class ServiceAppointment {
     @JoinColumn(name = "user_id")
     private User user;
 
+    // ...
+    // Melyik szervizben lesz az időpont
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "center_id")
+    private ServiceCenter center;
+// ...
+
+    public ServiceCenter getCenter() { return center; }
+    public void setCenter(ServiceCenter center) { this.center = center; }
+// ...
+
     @NotNull(message = "Service date/time is required")
     @Future(message = "Service date/time must be in the future")
     private LocalDateTime serviceDateTime;

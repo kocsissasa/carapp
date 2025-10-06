@@ -78,6 +78,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/forum/**").authenticated()
 
+                        .requestMatchers(HttpMethod.GET, "/api/centers", "/api/centers/top").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/centers/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/centers/*/vote").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/news/**").permitAll()
+
                         // Minden más engedett
                         .anyRequest().permitAll()
                 )
