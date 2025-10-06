@@ -12,12 +12,23 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.function.Function;
 
+/**
+ * JWT tokenek generálása és ellenőrzése.
+ * - HMAC SHA-256 aláírás (szimmetrikus kulcs)
+ * - subject = felhasználó email
+ * - lejárat (expiration) kezelése
+ */
+
 @Service
 public class JwtService {
 
     private final SecretKey key;
     private final long expirationMs;
 
+    /**
+     * A secret és az expiration konfigurációból jön (application.properties/yml).
+     * secret: legalább 256 bites (32+ char), hogy HS256-hoz biztosan elég legyen.
+     */
     public JwtService(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration-ms}") long expirationMs
@@ -26,15 +37,15 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    // Token létrehozása
+    // Új JWT generálása a felhasználó email-jével, mint subject.
     public String generateToken(String subjectEmail) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
-                .setSubject(subjectEmail)
-                .setIssuedAt(now)
-                .setExpiration(exp)
-                .signWith(key, SignatureAlgorithm.HS256)
+                .setSubject(subjectEmail)      // subject = email
+                .setIssuedAt(now)              // kibocsátás ideje
+                .setExpiration(exp)            // lejárat
+                .signWith(key, SignatureAlgorithm.HS256) // HS256 aláírás
                 .compact();
     }
 
@@ -44,6 +55,8 @@ public class JwtService {
     }
 
     // Token érvényesség ellenőrzése
+    // nem járt le
+    // subject megyezik a várt emaillel
     public boolean isTokenValid(String token, String expectedEmail) {
         String username = extractUsername(token);
         return (username != null && username.equals(expectedEmail) && !isTokenExpired(token));
