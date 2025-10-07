@@ -50,41 +50,37 @@ public class SecurityConfig {
 
                 // Jogosultsági szabályok
                 .authorizeHttpRequests(auth -> auth
-
-                        // Preflight kérések mindenhol engedve
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Auth végpontok (login/register) szabadok
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
 
-                        // Publikus GET autók végpont
                         .requestMatchers(HttpMethod.GET, "/api/cars").permitAll()
 
-                        // Admin végpontok csak admin jogosultsággal elérhetőek
                         .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
 
-                        // Autók és időpontok - írás/törléshez be kell lépni
                         .requestMatchers("/api/cars/**").authenticated()
                         .requestMatchers("/api/appointments/**").authenticated()
-
-                        // Védett felhasználói adatok
                         .requestMatchers("/api/users/**").authenticated()
-
-                        // Fórum: olvasás: publikus, szerkesztés: beléptetett felhasználók számára
 
                         .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/forum/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/forum/**").authenticated()
 
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/forum/posts/*/reactions").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/forum/posts/*/react").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/forum/posts/*/react").authenticated()
+
+                        // <<< EZ LEGYEN AZ ADMIN ELŐTT / FELETT, hogy ne nyelje el
+                        .requestMatchers(HttpMethod.POST, "/api/centers/*/vote").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/centers", "/api/centers/top").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/centers/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/centers/*/vote").authenticated()
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/news/**").permitAll()
 
-                        // Minden más engedett
+                        .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
+
                         .anyRequest().permitAll()
+
                 )
                 // Token ellenőrzések kérések előtt
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

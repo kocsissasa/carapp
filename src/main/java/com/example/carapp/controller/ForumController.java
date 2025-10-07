@@ -4,15 +4,12 @@ import com.example.carapp.dto.CommentRequest;
 import com.example.carapp.dto.CommentResponse;
 import com.example.carapp.dto.PostRequest;
 import com.example.carapp.dto.PostResponse;
-import com.example.carapp.model.Comment;
-import com.example.carapp.model.ForumCategory;
-import com.example.carapp.model.Post;
-import com.example.carapp.model.Role;
+import com.example.carapp.model.*;
 import com.example.carapp.repository.CommentRepository;
 import com.example.carapp.repository.PostRepository;
 import com.example.carapp.repository.UserRepository;
 import jakarta.validation.Valid;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,12 +19,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-
 /**
- * Ez kezeli a fórumhoz kapcsolódó végpontokat
- * CRUD műveletek
- * Kommentek
- * Jogosultságok (Olvasni bárki tudja, posztolni beléptetett felhasználó, ADMIN mindent tud)
+ * Fórum/üzenőfal CRUD + kommentek.
  */
 @RestController
 @RequestMapping("/api/forum")
@@ -37,7 +30,9 @@ public class ForumController {
     private final CommentRepository commentRepo;
     private final UserRepository userRepo;
 
-    public ForumController(PostRepository postRepo, CommentRepository commentRepo, UserRepository userRepo) {
+    public ForumController(PostRepository postRepo,
+                           CommentRepository commentRepo,
+                           UserRepository userRepo) {
         this.postRepo = postRepo;
         this.commentRepo = commentRepo;
         this.userRepo = userRepo;
@@ -45,143 +40,101 @@ public class ForumController {
 
     // ---------- POSTS ----------
 
-    // Listázás paginálva + szűrők: category, authorId, minRating
+    /** Legújabbtól a régebbiig – opcionális kategória szűrővel. */
     @GetMapping("/posts")
-    public Page<PostResponse> listPosts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "createdAt,desc") String sort,
-            @RequestParam(required = false) ForumCategory category,
-            @RequestParam(required = false) Long authorId,
-            @RequestParam(required = false) Integer minRating
-    ) {
-        String[] parts = sort.split(",", 2);
-        String field = parts[0];
-        boolean asc = parts.length > 1 && "asc".equalsIgnoreCase(parts[1]);
-        Pageable pageable = PageRequest.of(page, size, asc ? Sort.by(field).ascending() : Sort.by(field).descending());
+    public List<PostResponse> listPosts(@RequestParam(required = false) ForumCategory category) {
+        List<Post> list = (category == null)
+                ? postRepo.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : postRepo.findByCategoryOrderByCreatedAtDesc(category);
 
-        Page<Post> res;
-        if (category != null && minRating != null) {
-            res = postRepo.findByCategoryAndRatingGreaterThanEqual(category, minRating, pageable);
-        } else if (category != null) {
-            res = postRepo.findByCategory(category, pageable);
-        } else if (authorId != null) {
-            res = postRepo.findByAuthor_Id(authorId, pageable);
-        } else {
-            res = postRepo.findAll(pageable);
-        }
-
-        return res.map(this::toPostResponse);
+        return list.stream().map(this::toPostResponse).toList();
     }
 
-// Konkrét poszt lekérése ID alapján
+    /** Egy poszt. */
     @GetMapping("/posts/{id}")
     public ResponseEntity<PostResponse> getPost(@PathVariable Long id) {
-        Optional<Post> opt = postRepo.findById(id);
-        if (opt.isEmpty()) {
-            return new ResponseEntity<PostResponse>(HttpStatus.NOT_FOUND);
-        }
-        return ResponseEntity.ok(toPostResponse(opt.get()));
+        return postRepo.findById(id)
+                .map(p -> ResponseEntity.ok(toPostResponse(p)))
+                .orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
     }
-/**
- * --- Új poszt létrehozása ---
- *  Auth szükséges
- *  Mentés után CREATED (201) státuszt ad vissza
- */
+
+    /** Új poszt (auth szükséges). */
     @PostMapping("/posts")
-    public ResponseEntity<PostResponse> createPost(@Valid @RequestBody PostRequest req, Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return new ResponseEntity<PostResponse>(HttpStatus.UNAUTHORIZED);
-        }
+    public ResponseEntity<PostResponse> createPost(@Valid @RequestBody PostRequest req,
+                                                   Authentication auth) {
+        if (auth == null || !auth.isAuthenticated())
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+
         var user = userRepo.findByEmail(auth.getName()).orElse(null);
-        if (user == null) {
-            return new ResponseEntity<PostResponse>(HttpStatus.FORBIDDEN);
-        }
+        if (user == null) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
         Post p = new Post();
         p.setAuthor(user);
-        p.setTitle(req.getTitle());
+        p.setTitle(blankToNull(req.getTitle())); // lehet null -> frontend defaultol
         p.setContent(req.getContent());
-        p.setCategory(req.getCategory());
-        p.setRating(req.getRating());
-        p.setCreatedAt(LocalDateTime.now());
-        p.setUpdatedAt(LocalDateTime.now());
+        p.setCategory(req.getCategory() != null ? req.getCategory() : ForumCategory.GENERAL);
+        p.setRating(normalizeRating(req.getRating()));
 
         Post saved = postRepo.save(p);
         return ResponseEntity.status(HttpStatus.CREATED).body(toPostResponse(saved));
     }
-    /** --- Poszt módosítása ---
-    *   Csak a tulajdonos vagy az ADMIN teheti meg
-    */
+
+    /** Módosítás (tulajdonos vagy ADMIN). */
     @PutMapping("/posts/{id}")
     public ResponseEntity<PostResponse> updatePost(@PathVariable Long id,
                                                    @Valid @RequestBody PostRequest req,
                                                    Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return new ResponseEntity<PostResponse>(HttpStatus.UNAUTHORIZED);
-        }
+        if (auth == null || !auth.isAuthenticated())
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+
         var me = userRepo.findByEmail(auth.getName()).orElse(null);
-        if (me == null) {
-            return new ResponseEntity<PostResponse>(HttpStatus.FORBIDDEN);
-        }
+        if (me == null) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
         Optional<Post> opt = postRepo.findById(id);
-        if (opt.isEmpty()) {
-            return new ResponseEntity<PostResponse>(HttpStatus.NOT_FOUND);
-        }
-        Post p = opt.get();
+        if (opt.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
 
+        Post p = opt.get();
         boolean isOwner = p.getAuthor().getId().equals(me.getId());
         boolean isAdmin = me.getRole() == Role.ADMIN;
-        if (!isOwner && !isAdmin) {
-            return new ResponseEntity<PostResponse>(HttpStatus.FORBIDDEN);
-        }
+        if (!isOwner && !isAdmin) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
-        p.setTitle(req.getTitle());
+        p.setTitle(blankToNull(req.getTitle()));
         p.setContent(req.getContent());
-        p.setCategory(req.getCategory());
-        p.setRating(req.getRating());
+        p.setCategory(req.getCategory() != null ? req.getCategory() : ForumCategory.GENERAL);
+        p.setRating(normalizeRating(req.getRating()));
         p.setUpdatedAt(LocalDateTime.now());
 
         return ResponseEntity.ok(toPostResponse(postRepo.save(p)));
     }
 
-    /** --- Poszt törlése---
-     *   Csak a tulajdonos vagy az ADMIN teheti meg
-     */
+    /** POSZT törlés (tulajdonos vagy ADMIN). */
     @DeleteMapping("/posts/{id}")
     public ResponseEntity<Void> deletePost(@PathVariable Long id, Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return new ResponseEntity<Void>(HttpStatus.UNAUTHORIZED);
-        }
+        if (auth == null || !auth.isAuthenticated())
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+
         var me = userRepo.findByEmail(auth.getName()).orElse(null);
-        if (me == null) {
-            return new ResponseEntity<Void>(HttpStatus.FORBIDDEN);
-        }
+        if (me == null) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
         Optional<Post> opt = postRepo.findById(id);
-        if (opt.isEmpty()) {
-            return new ResponseEntity<Void>(HttpStatus.NOT_FOUND);
-        }
-        Post p = opt.get();
+        if (opt.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
 
+        Post p = opt.get();
         boolean isOwner = p.getAuthor().getId().equals(me.getId());
         boolean isAdmin = me.getRole() == Role.ADMIN;
-        if (!isOwner && !isAdmin) {
-            return new ResponseEntity<Void>(HttpStatus.FORBIDDEN);
-        }
+        if (!isOwner && !isAdmin) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
         postRepo.deleteById(id);
-        return new ResponseEntity<Void>(HttpStatus.NO_CONTENT);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     // ---------- COMMENTS ----------
 
     @GetMapping("/posts/{postId}/comments")
     public ResponseEntity<List<CommentResponse>> listComments(@PathVariable Long postId) {
-        if (!postRepo.existsById(postId)) {
-            return new ResponseEntity<List<CommentResponse>>(HttpStatus.NOT_FOUND);
-        }
+        if (!postRepo.existsById(postId))
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
         var list = commentRepo.findByPost_IdOrderByCreatedAtDesc(postId)
                 .stream().map(this::toCommentResponse).toList();
         return ResponseEntity.ok(list);
@@ -191,22 +144,17 @@ public class ForumController {
     public ResponseEntity<CommentResponse> addComment(@PathVariable Long postId,
                                                       @Valid @RequestBody CommentRequest req,
                                                       Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return new ResponseEntity<CommentResponse>(HttpStatus.UNAUTHORIZED);
-        }
-        var me = userRepo.findByEmail(auth.getName()).orElse(null);
-        if (me == null) {
-            return new ResponseEntity<CommentResponse>(HttpStatus.FORBIDDEN);
-        }
+        if (auth == null || !auth.isAuthenticated())
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
 
-        Optional<Post> opt = postRepo.findById(postId);
-        if (opt.isEmpty()) {
-            return new ResponseEntity<CommentResponse>(HttpStatus.NOT_FOUND);
-        }
-        Post post = opt.get();
+        var me = userRepo.findByEmail(auth.getName()).orElse(null);
+        if (me == null) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+
+        var opt = postRepo.findById(postId);
+        if (opt.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
 
         Comment c = new Comment();
-        c.setPost(post);
+        c.setPost(opt.get());
         c.setAuthor(me);
         c.setContent(req.getContent());
         c.setCreatedAt(LocalDateTime.now());
@@ -215,7 +163,28 @@ public class ForumController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toCommentResponse(saved));
     }
 
-    // ---------- MAPPEREK ----------
+    /** KOMMENT törlés (komment szerzője vagy ADMIN). */
+    @DeleteMapping("/comments/{id}")
+    public ResponseEntity<Void> deleteComment(@PathVariable Long id, Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+        var me = userRepo.findByEmail(auth.getName()).orElse(null);
+        if (me == null) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+
+        var opt = commentRepo.findById(id);
+        if (opt.isEmpty()) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        var c = opt.get();
+        boolean isOwner = c.getAuthor().getId().equals(me.getId());
+        boolean isAdmin  = me.getRole() == Role.ADMIN;
+        if (!isOwner && !isAdmin) return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+
+        commentRepo.deleteById(id);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    // ---------- Mapperek & segédek ----------
 
     private PostResponse toPostResponse(Post p) {
         PostResponse r = new PostResponse();
@@ -239,5 +208,14 @@ public class ForumController {
         r.setContent(c.getContent());
         r.setCreatedAt(c.getCreatedAt());
         return r;
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    private static Integer normalizeRating(Integer r) {
+        if (r == null) return null;
+        return Math.max(1, Math.min(5, r));
     }
 }

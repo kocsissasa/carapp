@@ -6,54 +6,79 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
-//      --- Fórum bejegyzés entitás ---
-// *       Mezők:
-// *           id – elsődleges kulcs.
-// *           author – a szerző (User).
-// *           title, content – poszt címe és tartalma.
-// *           category – a poszt kategóriája.
-// *           rating – opcionális értékelés (pl. szerviz tapasztalat).
-// *           createdAt, updatedAt – létrehozás és utolsó frissítés ideje.
-// *           Egy User több posztot is írhat.
-
 @Entity
 @Table(name = "forum_posts")
 public class Post {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false) @JoinColumn(name = "author_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "author_id")
     private User author;
 
-    @NotBlank @Size(max = 120)
+    /** Opcionális cím. */
+    @Size(max = 120)
+    @Column(length = 120)
     private String title;
 
-    @NotBlank @Size(max = 5000)
-    @Column(length = 5000)
+    /** Kötelező szöveg. */
+    @NotBlank
+    @Size(max = 5000)
+    @Column(nullable = false, length = 5000)
     private String content;
 
-    @Enumerated(EnumType.STRING) @Column(nullable = false)
+    /** Kötelező kategória (alapértelmezés: GENERAL). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
     private ForumCategory category = ForumCategory.GENERAL;
 
-    private Integer rating; // opcionális (SERVICE kategóriában értelmezett)
+    /** Opcionális értékelés (1–5), csak ha értelmezett. */
+    private Integer rating;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
 
-    // getters/setters
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    public Post() {}
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = this.createdAt;
+        if (this.category == null) this.category = ForumCategory.GENERAL;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+        if (this.category == null) this.category = ForumCategory.GENERAL;
+    }
+
+    // getters / setters
     public Long getId() { return id; }
+
     public User getAuthor() { return author; }
     public void setAuthor(User author) { this.author = author; }
+
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
     public ForumCategory getCategory() { return category; }
     public void setCategory(ForumCategory category) { this.category = category; }
+
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

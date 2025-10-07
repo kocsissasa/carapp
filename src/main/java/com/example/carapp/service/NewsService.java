@@ -1,7 +1,6 @@
 package com.example.carapp.service;
 
 import com.example.carapp.dto.NewsItem;
-import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -9,144 +8,175 @@ import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class NewsService {
 
-    private static final int TIMEOUT_MS = 14000;
+    /* ---------- Általános beállítások ---------- */
+
+    private static final int TIMEOUT_MS = 12000;
+
+    /** Emberibb User-Agent + referrer: sok anti-botnál életmentő. */
     private static final String UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-    private static final String GENERIC_UTINFORM = "Hiteles közúti közlekedési információk - Útinform";
+    /* ============================================================
+       ===============        PUBLIC API        ====================
+       ============================================================ */
 
-    private static final Pattern P_TOTALCAR =
-            Pattern.compile("^https?://totalcar\\.hu/(teszt|tesztek)/.+", Pattern.CASE_INSENSITIVE);
-
-    private static final Pattern P_HH_UTINFO =
-            Pattern.compile("^https?://hirhanyo\\.hu/hirek/utinfo/[^/#?]+/?$", Pattern.CASE_INSENSITIVE);
-
-    /* ------------------------------ PUBLIC API ------------------------------ */
-
-    /** Totalcar – a /tesztek/ gyűjtőről szedi a legújabb teszteket (deduplikálva). */
-    public List<NewsItem> fetchTotalcarTests(int limit) throws Exception {
+    /** TOTALCAR – a legújabb tesztek a fő listáról. */
+    public List<NewsItem> fetchTotalCarTests(int limit) throws Exception {
         final String url = "https://totalcar.hu/tesztek/";
-        Document doc = connect(url).get();
+        Document doc = loadHtml(url);
 
-        // A totalcar oldalon többféle markup van, de a cikk-permalink mindig /teszt... vagy /tesztek...
-        Elements a = new Elements();
-        a.addAll(doc.select("article a[href]"));
-        a.addAll(doc.select(".cards a[href]"));
-        a.addAll(doc.select("main a[href]"));
+        // Elég változó a markup – menjünk biztosra, sok hivatkozást megfogunk,
+        // majd domain / útvonal és cím alapján szűrünk.
+        Elements anchors = new Elements();
+        anchors.addAll(doc.select("main a[href]"));
+        anchors.addAll(doc.select("article a[href], .article a[href]"));
+        anchors.addAll(doc.select(".post, .listing, .cikk, .grid a[href]"));
+        anchors.addAll(doc.select("h2 a[href], h3 a[href]"));
 
-        return collectFromAnchors(
-                a, limit, "Totalcar",
-                href -> P_TOTALCAR.matcher(href).matches(),
-                this::pageTitleIfWeak,
-                "https://totalcar.hu"
-        );
-    }
+        // csak a tesztek al-oldalait engedjük
+        List<NewsItem> items = collectFromAnchors(url, anchors, "Totalcar", limit)
+                .stream()
+                .filter(n -> {
+                    try {
+                        URI u = URI.create(n.getLink());
+                        return u.getHost() != null
+                                && u.getHost().contains("totalcar.hu")
+                                && u.getPath() != null
+                                && (u.getPath().startsWith("/tesztek/")
+                                || u.getPath().contains("/teszt"));
+                    } catch (Exception ignored) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
 
-    /** Útinfó – 1) Hírhányó /utinfo/, 2) Utinform (hivatalos), 3) Google News fallback. */
-    public List<NewsItem> fetchUtinform(int limit) throws Exception {
-        try {
-            List<NewsItem> hh = fetchUtinformFromHirhanyo(limit);
-            if (!hh.isEmpty()) return hh;
-        } catch (Exception ignored) {}
-
-        try {
-            List<NewsItem> off = fetchUtinformFromSite(limit);
-            if (!off.isEmpty()) return off;
-        } catch (Exception ignored) {}
-
-        // Fallback – Google News (sabloncím javítással)
-        List<NewsItem> rss = fetchGoogleNews("utinform.hu", "", limit, "Útinform");
-        for (NewsItem n : rss) {
-            if (GENERIC_UTINFORM.equalsIgnoreCase(n.getTitle()) || n.getTitle().length() < 8) {
-                String better = pageTitle(n.getLink());
-                if (!better.isBlank()) n.setTitle(better);
-            }
+        // ha kevés lenne, egészítsük ki Google News-szal (site szűrő)
+        if (items.size() < Math.min(limit, 6)) {
+            items = uniqueByLinkAndTitle(
+                    items,
+                    fetchFromGoogleNews("totalcar.hu", "teszt", limit, "Totalcar"),
+                    limit
+            );
         }
-        return rss;
+        return items;
     }
 
-    /* -------------------------- Forrás-specifikusak ------------------------- */
-
-    /** Hírhányó /utinfo/ kategória – csak az ide tartozó permalinkek. */
-    public List<NewsItem> fetchUtinformFromHirhanyo(int limit) throws Exception {
-        final String url = "https://hirhanyo.hu/hirek/utinfo/";
-        Document doc = connect(url).get();
-
-        Elements a = new Elements();
-        a.addAll(doc.select("main a[href]"));
-        a.addAll(doc.select("article a[href]"));
-        a.addAll(doc.select(".post a[href], .card a[href], .entry a[href], .list a[href]"));
-
-        return collectFromAnchors(
-                a, limit, "Útinfó – Hírhányó",
-                href -> P_HH_UTINFO.matcher(href).matches(),
-                this::pageTitleIfWeak,
-                "https://hirhanyo.hu"
-        );
-    }
-
-    /** Utinform hivatalos híroldal – cím + link. */
+    /** ÚTINFORM – közvetlenül az utinform.hu híroldalról, agresszívebb letöltéssel. */
     public List<NewsItem> fetchUtinformFromSite(int limit) throws Exception {
         final String url = "https://www.utinform.hu/hu/news?d=0";
-        Document doc = connect(url).get();
 
-        // A listában a hír címek <a> elemek – abszolutizáljuk és szűrjük a használhatókat.
-        Elements a = new Elements();
-        a.addAll(doc.select("main a[href]"));
-        a.addAll(doc.select(".news a[href], article a[href], li a[href]"));
+        Document doc;
+        try {
+            doc = loadHtml(url);
+        } catch (Exception e) {
+            // ha a site blokkol / időtúllépés, egyből Google News fallback
+            return fetchFromGoogleNews("utinform.hu", "", limit, "Útinform");
+        }
 
-        Predicate<String> filter = href -> {
-            String abs = absUrl(href, "https://www.utinform.hu");
-            try {
-                URI u = new URI(abs);
-                if (u.getHost() == null || !u.getHost().contains("utinform.hu")) return false;
-                String path = Optional.ofNullable(u.getPath()).orElse("");
-                // A részletek tipikusan /hu/news/.. vagy /hu/hirek/.. alatt vannak – legyünk megengedők
-                return path.contains("/news") || path.contains("/hirek");
-            } catch (URISyntaxException e) {
-                return false;
-            }
-        };
+        Elements anchors = new Elements();
+        // több szelektor – gyakran változik a markup
+        anchors.addAll(doc.select("main a[href]"));
+        anchors.addAll(doc.select(".content a[href], .news-list a[href], .container a[href]"));
+        anchors.addAll(doc.select("article a[href], .list a[href], .row a[href]"));
+        anchors.addAll(doc.select("h1 a[href], h2 a[href], h3 a[href]"));
 
-        return collectFromAnchors(
-                a, limit, "Útinform",
-                filter,
-                /* titleResolver */ null,
-                "https://www.utinform.hu"
-        );
+        List<NewsItem> items = collectFromAnchors(url, anchors, "Útinform", limit)
+                .stream()
+                .filter(n -> isHttp(n.getLink()))
+                .collect(Collectors.toList());
+
+        // ha kevés/üres: Google News kiegészítés
+        if (items.isEmpty() || items.size() < Math.min(limit, 4)) {
+            items = uniqueByLinkAndTitle(
+                    items,
+                    fetchFromGoogleNews("utinform.hu", "", limit, "Útinform"),
+                    limit
+            );
+        }
+        return items;
     }
 
-    /** Google News RSS (általános segéd). */
-    public List<NewsItem> fetchGoogleNews(String site, String extraQuery, int limit, String sourceLabel) throws Exception {
+    /** ÚTINFORM – alternatív forrás a HírHányó „Útinfó” gyűjtőoldaláról. */
+    public List<NewsItem> fetchHirhanyoUtinfo(int limit) throws Exception {
+        final String url = "https://hirhanyo.hu/hirek/utinfo/";
+        Document doc = loadHtml(url);
+
+        Elements anchors = new Elements();
+        anchors.addAll(doc.select("main a[href]"));
+        anchors.addAll(doc.select(".post-list a[href], .card a[href]"));
+        anchors.addAll(doc.select("article a[href], h2 a[href], h3 a[href]"));
+
+        // Csak a hirhanyo.hu/hirek/... cikkeket engedjük.
+        List<NewsItem> items = collectFromAnchors(url, anchors, "HírHányó — Útinfó", limit)
+                .stream()
+                .filter(n -> {
+                    try {
+                        URI u = URI.create(n.getLink());
+                        return u.getHost() != null
+                                && u.getHost().contains("hirhanyo.hu")
+                                && u.getPath() != null
+                                && u.getPath().startsWith("/hirek/");
+                    } catch (Exception ignored) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // Ha kevés, egy finom Google News rásegítés útinfó kulcsszóval
+        if (items.size() < Math.min(limit, 6)) {
+            items = uniqueByLinkAndTitle(
+                    items,
+                    fetchFromGoogleNews("hirhanyo.hu", "Útinfó", limit, "HírHányó — Útinfó"),
+                    limit
+            );
+        }
+        return items;
+    }
+
+    /* ============================================================
+       ===============      SEGÉD FÜGGVÉNYEK      =================
+       ============================================================ */
+
+    private Document loadHtml(String url) throws Exception {
+        // Agresszívebb, valós böngészőre emlékeztető kérés
+        return Jsoup.connect(url)
+                .userAgent(UA)
+                .referrer("https://www.google.com/")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header("Accept-Language", "hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7")
+                .timeout(TIMEOUT_MS)
+                .ignoreHttpErrors(true)
+                .get();
+    }
+
+    /** Google News keresés – „site:domain + extra” stílusban. */
+    private List<NewsItem> fetchFromGoogleNews(String site, String extraQuery, int limit, String sourceLabel) throws Exception {
         String q = "site:" + site + (extraQuery == null || extraQuery.isBlank() ? "" : " " + extraQuery);
-        String encoded = java.net.URLEncoder.encode(q, StandardCharsets.UTF_8);
+        String encoded = URLEncoder.encode(q, StandardCharsets.UTF_8);
         String url = "https://news.google.com/rss/search?q=" + encoded + "&hl=hu&gl=HU&ceid=HU:hu";
 
-        Document doc = connect(url).get();
+        Document doc = Jsoup.connect(url)
+                .userAgent(UA)
+                .referrer("https://www.google.com/")
+                .timeout(TIMEOUT_MS)
+                .get();
 
         List<NewsItem> items = new ArrayList<>();
         for (Element item : doc.select("item")) {
-            Element t = item.selectFirst("title");
-            Element l = item.selectFirst("link");
-            if (t == null || l == null) continue;
-
-            String title = safe(t.text());
-            String link  = canon(absUrl(l.text(), null));
-            if (title.length() < 3 || !link.startsWith("http")) continue;
-
-            if (items.stream().noneMatch(x -> x.getLink().equals(link))) {
+            String title = safeTrim(textOf(item.selectFirst("title")));
+            String link = safeTrim(textOf(item.selectFirst("link")));
+            if (!title.isBlank() && isHttp(link)) {
                 items.add(new NewsItem(title, link, sourceLabel, LocalDateTime.now()));
                 if (items.size() >= limit) break;
             }
@@ -154,132 +184,73 @@ public class NewsService {
         return items;
     }
 
-    /* ------------------------------- Gyűjtő ------------------------------- */
-
-    private List<NewsItem> collectFromAnchors(
-            Elements anchors,
-            int limit,
-            String sourceLabel,
-            Predicate<String> hrefFilter,
-            Function<String,String> titleResolverIfWeak,
-            String baseForRel
-    ) {
-        LinkedHashSet<String> seen = new LinkedHashSet<>();
+    /** Sokféle markupból gyűjtünk cikk-címeket + linkeket, aztán normalizálunk és szűrünk. */
+    private List<NewsItem> collectFromAnchors(String baseUrl, Elements anchors, String source, int limit) {
         List<NewsItem> out = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>(); // link + title duplikátumszűrő
 
         for (Element a : anchors) {
-            String href = canon(absUrl(a.attr("href"), baseForRel));
-            if (href.isBlank() || !hrefFilter.test(href)) continue;
+            String title = safeTrim(a.text());
+            if (title.isBlank()) continue;
 
-            // Cím – ha gyenge, oldalcím lekérése
-            String title = guessTitle(a);
-            if (titleResolverIfWeak != null && (title.length() < 8 || GENERIC_UTINFORM.equalsIgnoreCase(title))) {
-                String better = titleResolverIfWeak.apply(href);
-                if (!better.isBlank()) title = better;
-            }
-            if (title.length() < 8) continue;
+            String href = a.hasAttr("abs:href") ? a.attr("abs:href") : a.attr("href");
+            if (href == null || href.isBlank()) continue;
+            href = makeAbsolute(baseUrl, href);
+            if (!isHttp(href)) continue;
 
-            if (seen.add(href)) {
-                out.add(new NewsItem(title, href, sourceLabel, LocalDateTime.now()));
+            // triviális sallangok kiszűrése
+            if (href.endsWith("#") || href.contains("#comments")) continue;
+
+            String key = normalize(title) + "||" + normalize(href);
+            if (seen.add(key)) {
+                out.add(new NewsItem(title, href, source, LocalDateTime.now()));
                 if (out.size() >= limit) break;
             }
         }
         return out;
     }
 
-    private String guessTitle(Element a) {
-        String t = safe(a.hasAttr("title") ? a.attr("title") : a.text());
-        if (t.length() >= 8) return t;
-        Element block = a.closest("article, .post, .card, .entry, li, .list-item");
-        if (block != null) {
-            Element h = block.selectFirst("h1, h2, h3, .title, .entry-title, .card-title");
-            if (h != null) t = safe(h.text());
+    /** Két lista „összefésülése” duplikátumok nélkül (link+title alapján). */
+    private List<NewsItem> uniqueByLinkAndTitle(List<NewsItem> base, List<NewsItem> add, int limit) {
+        LinkedHashMap<String, NewsItem> map = new LinkedHashMap<>();
+        for (NewsItem n : base) map.put(normalize(n.getTitle()) + "||" + normalize(n.getLink()), n);
+        for (NewsItem n : add) {
+            String k = normalize(n.getTitle()) + "||" + normalize(n.getLink());
+            map.putIfAbsent(k, n);
+            if (map.size() >= limit) break;
         }
-        return t;
+        return new ArrayList<>(map.values()).subList(0, Math.min(limit, map.size()));
     }
 
-    /* --------------------------- Link/cím segédek --------------------------- */
+    private static String textOf(Element e) {
+        return e == null ? "" : e.text();
+    }
 
-    private String pageTitleIfWeak(String url) {
+    private static String safeTrim(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private static boolean isHttp(String url) {
         try {
-            String t = pageTitle(url);
-            return t.length() >= 8 ? t : "";
-        } catch (Exception e) {
-            return "";
-        }
+            return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+        } catch (Exception e) { return false; }
     }
 
-    private String pageTitle(String url) {
+    private static String makeAbsolute(String base, String href) {
         try {
-            Document d = connect(url).get();
-            Element og = d.selectFirst("meta[property=og:title], meta[name=og:title]");
-            if (og != null) {
-                String v = safe(og.attr("content"));
-                if (v.length() >= 8) return v;
-            }
-            return safe(d.title());
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private Connection connect(String url) {
-        return Jsoup.connect(url)
-                .userAgent(UA)
-                .referrer("https://www.google.com/")
-                .timeout(TIMEOUT_MS)
-                .ignoreHttpErrors(true)
-                .ignoreContentType(true)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7")
-                .header("Cache-Control", "no-cache");
-    }
-
-    private static String safe(String s) {
-        if (s == null) return "";
-        return s.replace('\u00A0', ' ').trim();
-    }
-
-    /** Relatív → abszolút. */
-    private static String absUrl(String href, String base) {
-        if (href == null) return "";
-        href = href.trim();
-        if (href.isEmpty()) return "";
-        try {
-            URI u = new URI(href);
-            if (u.isAbsolute()) return href;
-        } catch (URISyntaxException ignored) {}
-        if (base == null || base.isBlank()) return href;
-        try {
-            return new URI(base).resolve(href).toString();
-        } catch (Exception e) {
+            URL u = new URL(new URL(base), href);
+            return u.toString();
+        } catch (Exception ignored) {
             return href;
         }
     }
 
-    /** Kánon URL: utm/kampány paramok le, duplázódás megszüntetése. */
-    private static String canon(String url) {
-        try {
-            URI u = new URI(url);
-            String q = u.getQuery();
-            // dobjuk az UTM / fbclid / gclid stb. zajt
-            Map<String, String> keep = new LinkedHashMap<>();
-            if (q != null) {
-                for (String p : q.split("&")) {
-                    int i = p.indexOf('=');
-                    String k = (i >= 0 ? p.substring(0, i) : p).toLowerCase(Locale.ROOT);
-                    if (k.startsWith("utm_") || k.equals("fbclid") || k.equals("gclid")) continue;
-                    keep.put(p, "");
-                }
-            }
-            String newQ = keep.isEmpty() ? null : String.join("&", keep.keySet());
-            URI clean = new URI(u.getScheme(), u.getAuthority(), u.getPath(), newQ, null);
-            String s = clean.toString();
-            // trailing slash normalizálás
-            if (s.endsWith("/")) s = s.substring(0, s.length() - 1);
-            return s;
-        } catch (Exception e) {
-            return url;
-        }
+    private static String normalize(String s) {
+        if (s == null) return "";
+        String t = s.trim().toLowerCase(Locale.ROOT);
+        t = t.replaceAll("\\s+", " ");
+        // néhány tipikus UTM/szerviz paraméter kiszórása
+        t = t.replaceAll("([?&])(utm_[^=]+|gclid|fbclid)=[^&]+", "");
+        return t;
     }
 }

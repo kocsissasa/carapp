@@ -9,31 +9,22 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/news")
 public class NewsController {
-
     private final NewsService news;
-
-    public NewsController(NewsService news) {
-        this.news = news;
-    }
+    public NewsController(NewsService news) { this.news = news; }
 
     @GetMapping("/totalcar")
-    public List<NewsItem> totalcar(@RequestParam(defaultValue = "8") int limit) throws Exception {
-        return news.fetchTotalcarTests(limit);
+    public List<NewsItem> totalcar(@RequestParam(defaultValue = "20") int limit) throws Exception {
+        return news.fetchTotalCarTests(limit);
     }
 
     @GetMapping("/utinform")
-    public List<NewsItem> utinform(@RequestParam(defaultValue = "12") int limit) throws Exception {
-        return news.fetchUtinform(limit);
+    public List<NewsItem> utinform(@RequestParam(defaultValue = "20") int limit) throws Exception {
+        return news.fetchUtinformFromSite(limit); // vagy fetchHirhanyoUtinfo(limit)
     }
 
-    // tesztendpontok – opcionálisak
+    // ha szeretnél külön endpointot:
     @GetMapping("/utinform-hirhanyo")
-    public List<NewsItem> utinformHirhanyo(@RequestParam(defaultValue = "12") int limit) throws Exception {
-        return news.fetchUtinformFromHirhanyo(limit);
-    }
-
-    @GetMapping("/utinform-site")
-    public List<NewsItem> utinformSite(@RequestParam(defaultValue = "12") int limit) throws Exception {
-        return news.fetchUtinformFromSite(limit);
+    public List<NewsItem> utinformHirhanyo(@RequestParam(defaultValue = "20") int limit) throws Exception {
+        return news.fetchHirhanyoUtinfo(limit);
     }
 }
