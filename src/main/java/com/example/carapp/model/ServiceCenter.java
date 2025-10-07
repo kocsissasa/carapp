@@ -6,19 +6,32 @@ import jakarta.validation.constraints.NotBlank;
 @Entity
 @Table(name = "service_centers")
 public class ServiceCenter {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank private String name;
-    @NotBlank private String city;
-    @NotBlank private String address;
+    @NotBlank
+    @Column(nullable = false)
+    private String name;
 
-    // pl. Google Maps helyazonosító (opcionális)
+    @NotBlank
+    @Column(nullable = false)
+    private String city;
+
+    @NotBlank
+    @Column(nullable = false)
+    private String address;
+
+    // Opcionális: Google Maps placeId (ha később útvonaltervezéshez kell)
     private String placeId;
 
     public ServiceCenter() {}
+
     public ServiceCenter(String name, String city, String address) {
-        this.name = name; this.city = city; this.address = address;
+        this.name = name;
+        this.city = city;
+        this.address = address;
     }
 
     // getters/setters

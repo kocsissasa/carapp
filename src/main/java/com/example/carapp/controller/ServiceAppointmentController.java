@@ -1,16 +1,12 @@
 package com.example.carapp.controller;
 
-import com.example.carapp.model.AppointmentStatus;
-import com.example.carapp.model.ServiceAppointment;
-import com.example.carapp.model.ServiceCenter;
-import com.example.carapp.model.User;
+import com.example.carapp.model.*;
 import com.example.carapp.repository.CarRepository;
 import com.example.carapp.repository.ServiceAppointmentRepository;
 import com.example.carapp.repository.ServiceCenterRepository;
 import com.example.carapp.repository.UserRepository;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,12 +14,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * ServiceAppointmentController
- * ---------------------------
- * Szervizidőpontok kezelése (CRUD jellegű műveletek).
- * Újítás: foglaláskor kötelező megadni a ServiceCenter-t is.
- */
 @RestController
 @RequestMapping("/api/appointments")
 public class ServiceAppointmentController {
@@ -60,7 +50,7 @@ public class ServiceAppointmentController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.FORBIDDEN).build());
     }
 
-    // USER: új időpont foglalása (Saját autó + kötelező ServiceCenter)
+    // USER: új időpont (saját autó + KÖTELEZŐ center)
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody ServiceAppointment req, Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
@@ -69,32 +59,28 @@ public class ServiceAppointmentController {
 
         return userRepository.findByEmail(auth.getName())
                 .<ResponseEntity<?>>map(user -> {
-                    // --- Autó ellenőrzés ---
+
+                    // --- Autó ---
                     if (req.getCar() == null || req.getCar().getId() == null) {
                         return ResponseEntity.badRequest().body("Car id is required");
                     }
                     var carOpt = carRepository.findById(req.getCar().getId());
-                    if (carOpt.isEmpty()) {
-                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Car not found");
-                    }
+                    if (carOpt.isEmpty()) return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Car not found");
                     var car = carOpt.get();
                     if (!Objects.equals(car.getOwner().getId(), user.getId())) {
                         return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not your car");
                     }
 
-                    // --- ServiceCenter ellenőrzés (ÚJ) ---
+                    // --- Center (kötelező) ---
                     if (req.getCenter() == null || req.getCenter().getId() == null) {
                         return ResponseEntity.badRequest().body("Service center id is required");
                     }
                     var centerOpt = centerRepository.findById(req.getCenter().getId());
-                    if (centerOpt.isEmpty()) {
-                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service center not found");
-                    }
-                    ServiceCenter center = centerOpt.get();
+                    if (centerOpt.isEmpty()) return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service center not found");
+                    var center = centerOpt.get();
 
-                    // --- Ütközés ellenőrzés (egyszerű) ---
-                    if (appointmentRepository.existsByCar_IdAndServiceDateTime(
-                            car.getId(), req.getServiceDateTime())) {
+                    // --- Ütközés ellenőrzés ---
+                    if (appointmentRepository.existsByCar_IdAndServiceDateTime(car.getId(), req.getServiceDateTime())) {
                         return ResponseEntity.status(HttpStatus.CONFLICT).body("Time slot already booked for this car");
                     }
 
@@ -102,7 +88,7 @@ public class ServiceAppointmentController {
                     var appt = new ServiceAppointment();
                     appt.setCar(car);
                     appt.setUser(user);
-                    appt.setCenter(center); // ÚJ: beállítjuk a választott szervizt
+                    appt.setCenter(center);
                     appt.setServiceDateTime(req.getServiceDateTime());
                     appt.setDescription(req.getDescription());
                     appt.setStatus(AppointmentStatus.PENDING);
@@ -113,7 +99,7 @@ public class ServiceAppointmentController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.FORBIDDEN).body("User not found"));
     }
 
-    // USER: saját időpont módosítása (leírás/dátum/center) amíg PENDING
+    // USER: módosítás (leírás/dátum/center) amíg PENDING
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id,
                                     @Valid @RequestBody ServiceAppointment updated,
@@ -121,11 +107,8 @@ public class ServiceAppointmentController {
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-
         var me = userRepository.findByEmail(auth.getName()).orElse(null);
-        if (me == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
+        if (me == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         return appointmentRepository.findById(id)
                 .<ResponseEntity<?>>map(appt -> {
@@ -136,28 +119,22 @@ public class ServiceAppointmentController {
                         return ResponseEntity.status(HttpStatus.CONFLICT).body("Only PENDING appointments can be edited");
                     }
 
-                    // Dátumváltoztatás esetén ütközés-ellenőrzés
                     if (updated.getServiceDateTime() != null &&
                             appointmentRepository.existsByCar_IdAndServiceDateTime(
                                     appt.getCar().getId(), updated.getServiceDateTime())) {
                         return ResponseEntity.status(HttpStatus.CONFLICT).body("Time slot already booked for this car");
                     }
 
-                    // Leírás frissítés
                     if (updated.getDescription() != null && !updated.getDescription().isBlank()) {
                         appt.setDescription(updated.getDescription());
                     }
-                    // Dátum frissítés
                     if (updated.getServiceDateTime() != null) {
                         appt.setServiceDateTime(updated.getServiceDateTime());
                     }
-                    // Szerviz (center) frissítés (ÚJ – opcionális)
                     if (updated.getCenter() != null && updated.getCenter().getId() != null) {
-                        var centerOpt = centerRepository.findById(updated.getCenter().getId());
-                        if (centerOpt.isEmpty()) {
-                            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service center not found");
-                        }
-                        appt.setCenter(centerOpt.get());
+                        var cOpt = centerRepository.findById(updated.getCenter().getId());
+                        if (cOpt.isEmpty()) return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service center not found");
+                        appt.setCenter(cOpt.get());
                     }
 
                     return ResponseEntity.ok(appointmentRepository.save(appt));
@@ -165,16 +142,14 @@ public class ServiceAppointmentController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // USER: saját időpont lemondása (CANCELLED) – soft delete
+    // USER: lemondás (CANCELLED)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancel(@PathVariable Long id, Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         var me = userRepository.findByEmail(auth.getName()).orElse(null);
-        if (me == null) {
-            return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
-        }
+        if (me == null) return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
 
         return appointmentRepository.findById(id)
                 .<ResponseEntity<Void>>map(appt -> {
@@ -188,14 +163,13 @@ public class ServiceAppointmentController {
                 .orElseGet(() -> ResponseEntity.<Void>notFound().build());
     }
 
-    // ADMIN: státusz módosítás (PENDING → CONFIRMED/CANCELLED)
+    // ADMIN: státusz módosítás
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable Long id,
                                           @RequestParam AppointmentStatus status) {
         if (status != AppointmentStatus.CONFIRMED && status != AppointmentStatus.CANCELLED) {
             return ResponseEntity.badRequest().body("Status must be CONFIRMED or CANCELLED");
         }
-
         return appointmentRepository.findById(id)
                 .<ResponseEntity<?>>map(appt -> {
                     appt.setStatus(status);

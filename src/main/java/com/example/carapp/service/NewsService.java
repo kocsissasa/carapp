@@ -8,79 +8,226 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 @Service
 public class NewsService {
 
-    private static final int TIMEOUT_MS = 15000;
+    private static final int TIMEOUT_MS = 14000;
     private static final String UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-    /* ==========================
-       TOTALCAR – közvetlen scrape
-       ========================== */
-    public List<NewsItem> fetchTotalcarFromSite(int limit) throws Exception {
+    private static final String GENERIC_UTINFORM = "Hiteles közúti közlekedési információk - Útinform";
+
+    private static final Pattern P_TOTALCAR =
+            Pattern.compile("^https?://totalcar\\.hu/(teszt|tesztek)/.+", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern P_HH_UTINFO =
+            Pattern.compile("^https?://hirhanyo\\.hu/hirek/utinfo/[^/#?]+/?$", Pattern.CASE_INSENSITIVE);
+
+    /* ------------------------------ PUBLIC API ------------------------------ */
+
+    /** Totalcar – a /tesztek/ gyűjtőről szedi a legújabb teszteket (deduplikálva). */
+    public List<NewsItem> fetchTotalcarTests(int limit) throws Exception {
         final String url = "https://totalcar.hu/tesztek/";
-        Document doc = baseConnect(url).get();
+        Document doc = connect(url).get();
 
-        Elements links = new Elements();
-        links.addAll(doc.select("article a[href]"));
-        links.addAll(doc.select("h1 a[href], h2 a[href], h3 a[href]"));
-        if (links.isEmpty()) links = doc.select("a[href]");
+        // A totalcar oldalon többféle markup van, de a cikk-permalink mindig /teszt... vagy /tesztek...
+        Elements a = new Elements();
+        a.addAll(doc.select("article a[href]"));
+        a.addAll(doc.select(".cards a[href]"));
+        a.addAll(doc.select("main a[href]"));
 
-        return pickArticles(
-                links,
-                "https://totalcar.hu",
-                "/tesztek/",
-                "Totalcar",
-                limit
+        return collectFromAnchors(
+                a, limit, "Totalcar",
+                href -> P_TOTALCAR.matcher(href).matches(),
+                this::pageTitleIfWeak,
+                "https://totalcar.hu"
         );
     }
 
-    /* ==========================
-       ÚTINFORM – közvetlen scrape + fallbackok
-       ========================== */
+    /** Útinfó – 1) Hírhányó /utinfo/, 2) Utinform (hivatalos), 3) Google News fallback. */
+    public List<NewsItem> fetchUtinform(int limit) throws Exception {
+        try {
+            List<NewsItem> hh = fetchUtinformFromHirhanyo(limit);
+            if (!hh.isEmpty()) return hh;
+        } catch (Exception ignored) {}
+
+        try {
+            List<NewsItem> off = fetchUtinformFromSite(limit);
+            if (!off.isEmpty()) return off;
+        } catch (Exception ignored) {}
+
+        // Fallback – Google News (sabloncím javítással)
+        List<NewsItem> rss = fetchGoogleNews("utinform.hu", "", limit, "Útinform");
+        for (NewsItem n : rss) {
+            if (GENERIC_UTINFORM.equalsIgnoreCase(n.getTitle()) || n.getTitle().length() < 8) {
+                String better = pageTitle(n.getLink());
+                if (!better.isBlank()) n.setTitle(better);
+            }
+        }
+        return rss;
+    }
+
+    /* -------------------------- Forrás-specifikusak ------------------------- */
+
+    /** Hírhányó /utinfo/ kategória – csak az ide tartozó permalinkek. */
+    public List<NewsItem> fetchUtinformFromHirhanyo(int limit) throws Exception {
+        final String url = "https://hirhanyo.hu/hirek/utinfo/";
+        Document doc = connect(url).get();
+
+        Elements a = new Elements();
+        a.addAll(doc.select("main a[href]"));
+        a.addAll(doc.select("article a[href]"));
+        a.addAll(doc.select(".post a[href], .card a[href], .entry a[href], .list a[href]"));
+
+        return collectFromAnchors(
+                a, limit, "Útinfó – Hírhányó",
+                href -> P_HH_UTINFO.matcher(href).matches(),
+                this::pageTitleIfWeak,
+                "https://hirhanyo.hu"
+        );
+    }
+
+    /** Utinform hivatalos híroldal – cím + link. */
     public List<NewsItem> fetchUtinformFromSite(int limit) throws Exception {
-        List<NewsItem> first = scrapeUtinformList("https://www.utinform.hu/hu/news?d=0", limit);
-        if (!first.isEmpty()) return first;
+        final String url = "https://www.utinform.hu/hu/news?d=0";
+        Document doc = connect(url).get();
 
-        List<NewsItem> second = scrapeUtinformList("https://www.utinform.hu/hu", limit);
-        if (!second.isEmpty()) return second;
+        // A listában a hír címek <a> elemek – abszolutizáljuk és szűrjük a használhatókat.
+        Elements a = new Elements();
+        a.addAll(doc.select("main a[href]"));
+        a.addAll(doc.select(".news a[href], article a[href], li a[href]"));
 
-        List<NewsItem> third = tryGenericAnchors(
-                "https://www.utinform.hu/hu",
-                "https://www.utinform.hu",
-                Arrays.asList("/hu/news", "/hu/hirek"),
-                "Útinform",
-                limit
-        );
-        if (!third.isEmpty()) return third;
+        Predicate<String> filter = href -> {
+            String abs = absUrl(href, "https://www.utinform.hu");
+            try {
+                URI u = new URI(abs);
+                if (u.getHost() == null || !u.getHost().contains("utinform.hu")) return false;
+                String path = Optional.ofNullable(u.getPath()).orElse("");
+                // A részletek tipikusan /hu/news/.. vagy /hu/hirek/.. alatt vannak – legyünk megengedők
+                return path.contains("/news") || path.contains("/hirek");
+            } catch (URISyntaxException e) {
+                return false;
+            }
+        };
 
-        return Collections.singletonList(
-                new NewsItem(
-                        "Útinform hírek ideiglenesen nem érhetők el – kattints ide a térképre",
-                        "https://www.utinform.hu/hu/map?d=0&n=1&l=abc&v=19.50330,47.16250,7",
-                        "Útinform",
-                        LocalDateTime.now()
-                )
+        return collectFromAnchors(
+                a, limit, "Útinform",
+                filter,
+                /* titleResolver */ null,
+                "https://www.utinform.hu"
         );
     }
 
-    /* ==========================
-       Segédek
-       ========================== */
+    /** Google News RSS (általános segéd). */
+    public List<NewsItem> fetchGoogleNews(String site, String extraQuery, int limit, String sourceLabel) throws Exception {
+        String q = "site:" + site + (extraQuery == null || extraQuery.isBlank() ? "" : " " + extraQuery);
+        String encoded = java.net.URLEncoder.encode(q, StandardCharsets.UTF_8);
+        String url = "https://news.google.com/rss/search?q=" + encoded + "&hl=hu&gl=HU&ceid=HU:hu";
 
-    private Connection baseConnect(String url) {
-        return Jsoup
-                .connect(url)
+        Document doc = connect(url).get();
+
+        List<NewsItem> items = new ArrayList<>();
+        for (Element item : doc.select("item")) {
+            Element t = item.selectFirst("title");
+            Element l = item.selectFirst("link");
+            if (t == null || l == null) continue;
+
+            String title = safe(t.text());
+            String link  = canon(absUrl(l.text(), null));
+            if (title.length() < 3 || !link.startsWith("http")) continue;
+
+            if (items.stream().noneMatch(x -> x.getLink().equals(link))) {
+                items.add(new NewsItem(title, link, sourceLabel, LocalDateTime.now()));
+                if (items.size() >= limit) break;
+            }
+        }
+        return items;
+    }
+
+    /* ------------------------------- Gyűjtő ------------------------------- */
+
+    private List<NewsItem> collectFromAnchors(
+            Elements anchors,
+            int limit,
+            String sourceLabel,
+            Predicate<String> hrefFilter,
+            Function<String,String> titleResolverIfWeak,
+            String baseForRel
+    ) {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<NewsItem> out = new ArrayList<>();
+
+        for (Element a : anchors) {
+            String href = canon(absUrl(a.attr("href"), baseForRel));
+            if (href.isBlank() || !hrefFilter.test(href)) continue;
+
+            // Cím – ha gyenge, oldalcím lekérése
+            String title = guessTitle(a);
+            if (titleResolverIfWeak != null && (title.length() < 8 || GENERIC_UTINFORM.equalsIgnoreCase(title))) {
+                String better = titleResolverIfWeak.apply(href);
+                if (!better.isBlank()) title = better;
+            }
+            if (title.length() < 8) continue;
+
+            if (seen.add(href)) {
+                out.add(new NewsItem(title, href, sourceLabel, LocalDateTime.now()));
+                if (out.size() >= limit) break;
+            }
+        }
+        return out;
+    }
+
+    private String guessTitle(Element a) {
+        String t = safe(a.hasAttr("title") ? a.attr("title") : a.text());
+        if (t.length() >= 8) return t;
+        Element block = a.closest("article, .post, .card, .entry, li, .list-item");
+        if (block != null) {
+            Element h = block.selectFirst("h1, h2, h3, .title, .entry-title, .card-title");
+            if (h != null) t = safe(h.text());
+        }
+        return t;
+    }
+
+    /* --------------------------- Link/cím segédek --------------------------- */
+
+    private String pageTitleIfWeak(String url) {
+        try {
+            String t = pageTitle(url);
+            return t.length() >= 8 ? t : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String pageTitle(String url) {
+        try {
+            Document d = connect(url).get();
+            Element og = d.selectFirst("meta[property=og:title], meta[name=og:title]");
+            if (og != null) {
+                String v = safe(og.attr("content"));
+                if (v.length() >= 8) return v;
+            }
+            return safe(d.title());
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private Connection connect(String url) {
+        return Jsoup.connect(url)
                 .userAgent(UA)
-                .referrer("https://www.google.com")
+                .referrer("https://www.google.com/")
                 .timeout(TIMEOUT_MS)
-                .followRedirects(true)
                 .ignoreHttpErrors(true)
                 .ignoreContentType(true)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -88,126 +235,51 @@ public class NewsService {
                 .header("Cache-Control", "no-cache");
     }
 
-    private List<NewsItem> pickArticles(
-            Elements rawLinks,
-            String mustStartWithDomain,
-            String pathFragmentMustContain,
-            String sourceLabel,
-            int limit
-    ) {
-        Set<String> seen = new LinkedHashSet<>();
-        List<NewsItem> out = new ArrayList<>();
-
-        for (Element a : rawLinks) {
-            String text = safeTrim(a.text());
-            String href = a.hasAttr("abs:href") ? a.attr("abs:href") : a.attr("href");
-
-            if (href == null || href.isBlank()) continue;
-            if (!href.startsWith("http")) {
-                try { href = a.absUrl("href"); } catch (Exception ignored) {}
-            }
-            if (!href.startsWith(mustStartWithDomain)) continue;
-            if (pathFragmentMustContain != null && !pathFragmentMustContain.isBlank()) {
-                if (!href.contains(pathFragmentMustContain)) continue;
-            }
-            if (text.length() < 6) continue;
-            if (!seen.add(href)) continue;
-
-            out.add(new NewsItem(text, href, sourceLabel, LocalDateTime.now()));
-            if (out.size() >= Math.max(1, limit)) break;
-        }
-        return out;
+    private static String safe(String s) {
+        if (s == null) return "";
+        return s.replace('\u00A0', ' ').trim();
     }
 
-    private List<NewsItem> scrapeUtinformList(String url, int limit) throws Exception {
-        Document doc = baseConnect(url).get();
-
-        List<Elements> candidateGroups = Arrays.asList(
-                doc.select("main .news-list a[href]"),
-                doc.select("main article a[href]"),
-                doc.select("section .news a[href]"),
-                doc.select("main a[href]")
-        );
-
-        for (Elements group : candidateGroups) {
-            List<NewsItem> picked = pickArticles(
-                    group,
-                    "https://www.utinform.hu",
-                    "/hu/news",
-                    "Útinform",
-                    limit
-            );
-            if (!picked.isEmpty()) return picked;
+    /** Relatív → abszolút. */
+    private static String absUrl(String href, String base) {
+        if (href == null) return "";
+        href = href.trim();
+        if (href.isEmpty()) return "";
+        try {
+            URI u = new URI(href);
+            if (u.isAbsolute()) return href;
+        } catch (URISyntaxException ignored) {}
+        if (base == null || base.isBlank()) return href;
+        try {
+            return new URI(base).resolve(href).toString();
+        } catch (Exception e) {
+            return href;
         }
-
-        Elements all = doc.select("a[href]");
-        List<NewsItem> looser = all.stream()
-                .filter(a -> {
-                    String href = a.hasAttr("abs:href") ? a.attr("abs:href") : a.attr("href");
-                    if (href == null || href.isBlank()) return false;
-                    if (!href.startsWith("http")) {
-                        try { href = a.absUrl("href"); } catch (Exception ignored) {}
-                    }
-                    return href.startsWith("https://www.utinform.hu")
-                            && (href.contains("/hu/news") || href.contains("/hu/hirek"));
-                })
-                .map(a -> {
-                    String text = safeTrim(a.text());
-                    String href = a.hasAttr("abs:href") ? a.attr("abs:href") : a.attr("href");
-                    if (!href.startsWith("http")) {
-                        try { href = a.absUrl("href"); } catch (Exception ignored) {}
-                    }
-                    return new NewsItem(text, href, "Útinform", LocalDateTime.now());
-                })
-                .filter(n -> n.getTitle() != null && n.getTitle().length() >= 6)  // << GETTER
-                .collect(Collectors.toList());
-
-        LinkedHashMap<String, NewsItem> uniqByLink = new LinkedHashMap<>();
-        for (NewsItem n : looser) {
-            uniqByLink.putIfAbsent(n.getLink(), n);                                // << GETTER
-            if (uniqByLink.size() >= limit) break;
-        }
-        return new ArrayList<>(uniqByLink.values());
     }
 
-    private List<NewsItem> tryGenericAnchors(
-            String url,
-            String mustStartWithDomain,
-            List<String> pathFragments,
-            String sourceLabel,
-            int limit
-    ) throws Exception {
-        Document doc = baseConnect(url).get();
-        Elements links = doc.select("a[href]");
-        Set<String> seen = new LinkedHashSet<>();
-        List<NewsItem> out = new ArrayList<>();
-
-        for (Element a : links) {
-            String text = safeTrim(a.text());
-            String href = a.hasAttr("abs:href") ? a.attr("abs:href") : a.attr("href");
-
-            if (href == null || href.isBlank()) continue;
-            if (!href.startsWith("http")) {
-                try { href = a.absUrl("href"); } catch (Exception ignored) {}
-            }
-            if (!href.startsWith(mustStartWithDomain)) continue;
-            if (pathFragments != null && !pathFragments.isEmpty()) {
-                boolean ok = false;
-                for (String frag : pathFragments) {
-                    if (href.contains(frag)) { ok = true; break; }
+    /** Kánon URL: utm/kampány paramok le, duplázódás megszüntetése. */
+    private static String canon(String url) {
+        try {
+            URI u = new URI(url);
+            String q = u.getQuery();
+            // dobjuk az UTM / fbclid / gclid stb. zajt
+            Map<String, String> keep = new LinkedHashMap<>();
+            if (q != null) {
+                for (String p : q.split("&")) {
+                    int i = p.indexOf('=');
+                    String k = (i >= 0 ? p.substring(0, i) : p).toLowerCase(Locale.ROOT);
+                    if (k.startsWith("utm_") || k.equals("fbclid") || k.equals("gclid")) continue;
+                    keep.put(p, "");
                 }
-                if (!ok) continue;
             }
-            if (text.length() < 6) continue;
-            if (!seen.add(href)) continue;
-
-            out.add(new NewsItem(text, href, sourceLabel, LocalDateTime.now()));
-            if (out.size() >= Math.max(1, limit)) break;
+            String newQ = keep.isEmpty() ? null : String.join("&", keep.keySet());
+            URI clean = new URI(u.getScheme(), u.getAuthority(), u.getPath(), newQ, null);
+            String s = clean.toString();
+            // trailing slash normalizálás
+            if (s.endsWith("/")) s = s.substring(0, s.length() - 1);
+            return s;
+        } catch (Exception e) {
+            return url;
         }
-        return out;
-    }
-
-    private static String safeTrim(String s) {
-        return s == null ? "" : s.replaceAll("\\s+", " ").trim();
     }
 }

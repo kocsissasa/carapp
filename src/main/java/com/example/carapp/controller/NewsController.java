@@ -16,15 +16,24 @@ public class NewsController {
         this.news = news;
     }
 
-    /** Útinform – közvetlenül az oldalról */
-    @GetMapping("/utinform")
-    public List<NewsItem> utinform(@RequestParam(defaultValue = "6") int limit) throws Exception {
-        return news.fetchUtinformFromSite(limit);
+    @GetMapping("/totalcar")
+    public List<NewsItem> totalcar(@RequestParam(defaultValue = "8") int limit) throws Exception {
+        return news.fetchTotalcarTests(limit);
     }
 
-    /** Totalcar tesztek – közvetlenül az oldalról */
-    @GetMapping("/totalcar")
-    public List<NewsItem> totalcar(@RequestParam(defaultValue = "6") int limit) throws Exception {
-        return news.fetchTotalcarFromSite(limit);
+    @GetMapping("/utinform")
+    public List<NewsItem> utinform(@RequestParam(defaultValue = "12") int limit) throws Exception {
+        return news.fetchUtinform(limit);
+    }
+
+    // tesztendpontok – opcionálisak
+    @GetMapping("/utinform-hirhanyo")
+    public List<NewsItem> utinformHirhanyo(@RequestParam(defaultValue = "12") int limit) throws Exception {
+        return news.fetchUtinformFromHirhanyo(limit);
+    }
+
+    @GetMapping("/utinform-site")
+    public List<NewsItem> utinformSite(@RequestParam(defaultValue = "12") int limit) throws Exception {
+        return news.fetchUtinformFromSite(limit);
     }
 }

@@ -3,15 +3,19 @@ package com.example.carapp.controller;
 import com.example.carapp.dto.ServiceCenterRequest;
 import com.example.carapp.dto.ServiceCenterResponse;
 import com.example.carapp.dto.ServiceVoteRequest;
-import com.example.carapp.model.*;
-import com.example.carapp.repository.*;
+import com.example.carapp.model.ServiceCenter;
+import com.example.carapp.repository.ServiceCenterRepository;
+import com.example.carapp.repository.ServiceVoteRepository;
+import com.example.carapp.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/centers")
@@ -36,11 +40,9 @@ public class ServiceCenterController {
         return centerRepo.findAll();
     }
 
-    // LÉTREHOZÁS – ADMIN
+    // LÉTREHOZÁS – ADMIN (SecurityConfig-ben védd hasAuthority("ADMIN")-nal)
     @PostMapping
-    public ResponseEntity<ServiceCenterResponse> create(@Valid @RequestBody ServiceCenterRequest req,
-                                                        Authentication auth) {
-        // itt feltételezzük, hogy SecurityConfig hasAuthority("ADMIN") szabályozza a hozzáférést
+    public ResponseEntity<ServiceCenterResponse> create(@Valid @RequestBody ServiceCenterRequest req) {
         var sc = new ServiceCenter(req.getName(), req.getCity(), req.getAddress());
         sc.setPlaceId(req.getPlaceId());
         var saved = centerRepo.save(sc);
@@ -59,7 +61,9 @@ public class ServiceCenterController {
     public ResponseEntity<?> vote(@PathVariable Long id,
                                   @Valid @RequestBody ServiceVoteRequest req,
                                   Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (auth == null || !auth.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         var user = userRepo.findByEmail(auth.getName()).orElse(null);
         if (user == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
@@ -72,14 +76,13 @@ public class ServiceCenterController {
 
         var existing = voteRepo.findByUser_IdAndCenter_IdAndVoteYearAndVoteMonth(user.getId(), id, y, m);
         if (existing.isPresent()) {
-            // frissíthetjük is: pl. módosítja az adott havi értékelését
             var v = existing.get();
             v.setRating(req.getRating());
             voteRepo.save(v);
             return ResponseEntity.ok("Updated your vote for this month");
         }
 
-        var v = new ServiceVote();
+        var v = new com.example.carapp.model.ServiceVote();
         v.setUser(user);
         v.setCenter(center);
         v.setRating(req.getRating());
@@ -97,18 +100,18 @@ public class ServiceCenterController {
         var now = LocalDate.now();
         int y = (year == null ? now.getYear() : year);
         int m = (month == null ? now.getMonthValue() : month);
+
         var rows = voteRepo.findMonthlyTopCenters(y, m);
 
-        // egyszerű lista-objektumok (map-szerű)
-        var result = rows.stream().map(r -> {
-            var obj = new java.util.LinkedHashMap<String, Object>();
-            obj.put("centerId", r[0]);
-            obj.put("name", r[1]);
-            obj.put("city", r[2]);
-            obj.put("address", r[3]);
+        List<Map<String, Object>> result = rows.stream().map((Object[] r) -> {
+            Map<String, Object> obj = new LinkedHashMap<>();
+            obj.put("centerId",  r[0]);
+            obj.put("name",      r[1]);
+            obj.put("city",      r[2]);
+            obj.put("address",   r[3]);
             obj.put("avgRating", r[4]);
-            obj.put("votes", r[5]);
-            return obj;
+            obj.put("votes",     r[5]);
+            return obj; // <- már Map-ként tér vissza
         }).toList();
 
         return ResponseEntity.ok(result);

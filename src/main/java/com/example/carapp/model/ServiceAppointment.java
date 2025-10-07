@@ -7,19 +7,10 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 
-/*
-      --- Szervizidőpont foglalást reprezentál ---
-         Mezők:
-          id – elsődleges kulcs.
-          car – melyik autóra szól az időpont.
-          user – melyik felhasználó foglalta.
-          serviceDateTime – mikorra van foglalva (csak jövőbeli dátum lehet).
-          description – szerviz leírás (pl. olajcsere).
-          status – státusz (PENDING, CONFIRMED, CANCELLED).
-          createdAt – mikor jött létre a foglalás.
-          Kapcsolatok: minden foglalás tartozik egy autóhoz és egy userhez.
-*/
-
+/**
+ * Szervizidőpont foglalás.
+ * Kötelező: car, user, center, serviceDateTime, description.
+ */
 @Entity
 @Table(name = "service_appointments")
 public class ServiceAppointment {
@@ -30,24 +21,18 @@ public class ServiceAppointment {
 
     // Melyik autóra szól az időpont
     @ManyToOne(optional = false)
-    @JoinColumn(name = "car_id")
+    @JoinColumn(name = "car_id", nullable = false)
     private Car car;
 
-    // Ki foglalta (denormalizálva is tároljuk a könnyebb szűréshez)
+    // Ki foglalta
     @ManyToOne(optional = false)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // ...
-    // Melyik szervizben lesz az időpont
+    // Melyik szervizben lesz az időpont (kötelező)
     @ManyToOne(optional = false)
-    @JoinColumn(name = "center_id")
+    @JoinColumn(name = "center_id", nullable = false)
     private ServiceCenter center;
-// ...
-
-    public ServiceCenter getCenter() { return center; }
-    public void setCenter(ServiceCenter center) { this.center = center; }
-// ...
 
     @NotNull(message = "Service date/time is required")
     @Future(message = "Service date/time must be in the future")
@@ -64,18 +49,21 @@ public class ServiceAppointment {
 
     public ServiceAppointment() {}
 
-    // getters/setters
+    // getters
     public Long getId() { return id; }
     public Car getCar() { return car; }
     public User getUser() { return user; }
+    public ServiceCenter getCenter() { return center; }
     public LocalDateTime getServiceDateTime() { return serviceDateTime; }
     public String getDescription() { return description; }
     public AppointmentStatus getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 
+    // setters
     public void setId(Long id) { this.id = id; }
     public void setCar(Car car) { this.car = car; }
     public void setUser(User user) { this.user = user; }
+    public void setCenter(ServiceCenter center) { this.center = center; }
     public void setServiceDateTime(LocalDateTime serviceDateTime) { this.serviceDateTime = serviceDateTime; }
     public void setDescription(String description) { this.description = description; }
     public void setStatus(AppointmentStatus status) { this.status = status; }
