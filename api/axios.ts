@@ -1,16 +1,42 @@
+// src/api/axios.ts
 import axios from "axios";
 
+// .env-ben: VITE_API_URL = http://localhost:8080   (NINCS context path)
+// vagy:     VITE_API_URL = http://localhost:8080/carapp   (HA VAN context path)
+const RAW = (import.meta as any).env.VITE_API_URL || "http://localhost:8080";
+
+// biztonság kedvéért levágjuk a záró perjeleket
+const API_BASE = RAW.replace(/\/+$/, "");
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL, // .env-ből jön
+  baseURL: API_BASE,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false,
 });
 
-api.interceptors.request.use((config) => {
+// Bearer token felrakása
+api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem("token");
   if (token) {
-    config.headers = config.headers ?? {};
-    (config.headers as any).Authorization = `Bearer ${token}`;
+    cfg.headers = { ...cfg.headers, Authorization: `Bearer ${token}` };
   }
-  return config;
+  return cfg;
 });
+
+// Debug (kényelmes a hibakereséshez)
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    console.warn(
+      "[API ERROR]",
+      err?.config?.method?.toUpperCase(),
+      (err?.config?.baseURL || "") + (err?.config?.url || ""),
+      "->",
+      err?.response?.status,
+      err?.response?.data
+    );
+    throw err;
+  }
+);
 
 export default api;

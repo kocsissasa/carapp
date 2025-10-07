@@ -6,6 +6,7 @@ import Garage from "./pages/Garage.tsx"; // nálad .tsx kell
 import Login from "./pages/Login";
 import SideDock from "./components/SideDock";
 import { MapsLoaderProvider } from "./context/MapsLoader";
+import "./App.css";
 
 export default function App() {
   const location = useLocation();
@@ -67,7 +68,7 @@ export default function App() {
         <div style={{ marginLeft: hideDock ? 0 : 260, paddingBottom: 32 }}>
           <Routes location={location}>
             <Route path="/" element={<Home />} />
-            <Route path="/forum" element={<Forum />} />
+             <Route path="/forum" element={<Forum />} />
             <Route path="/map" element={<Map key="map-route" />} />
             <Route path="/garage" element={<Garage />} />
             <Route path="/login" element={<Login />} />

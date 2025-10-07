@@ -1,42 +1,112 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
+/* Reset & alap */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+#root { max-width: none; margin: 0; padding: 0; text-align: left; }
+body { background: #0b1020; color: #eaf1ff; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
+.title { color: #eaf1ff; font-weight: 800; letter-spacing: .2px; margin: 0 0 6px 2px; }
+.sub   { color: #e6ebff; margin: 0 0 8px; }
+.muted { color: #9fb1d1; font-size: 12.5px; }
+.error { color: #ffd7d7; }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
+/* Kártyák */
 .card {
-  padding: 2em;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
 }
 
-.read-the-docs {
-  color: #888;
+/* Bal oszlop: Chat */
+.chat-card {
+  display: grid;
+  grid-template-rows: 1fr auto; /* lista / input */
+  height: calc(100dvh - 160px);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
 }
+.chat-messages {
+  overflow: auto;
+  padding: 14px 14px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bubble {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.bubble-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.bubble-text { margin: 0; color: #eaf1ff; line-height: 1.5; }
+
+.chatbox {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  background: rgba(11,16,32,.55);
+}
+.chatbox input {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #eaf1ff;
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: none;
+}
+.chatbox button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.2);
+  background: linear-gradient(180deg, #5a7cff, #4160ff);
+  color: #fff; cursor: pointer;
+}
+.chatbox button:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Jobb oszlop: űrlap + listák */
+.label { color: #e6ebff; font-size: 13px; margin: 6px 0; }
+select, textarea {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #eaf1ff;
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: none;
+  width: 100%;
+}
+textarea { resize: vertical; }
+
+.card button {
+  margin-top: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.2);
+  background: linear-gradient(180deg, #5a7cff, #4160ff);
+  color: #fff; cursor: pointer;
+}
+.card button:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Csillagok */
+.stars { display: inline-flex; gap: 6px; margin: 6px 0; }
+.star  { background: transparent; border: none; padding: 0; cursor: pointer; color: #9fb1d1; line-height: 1; }
+.star.filled { color: #ffd36d; }
+
+/* Top 3 + friss értékelések */
+.toplist { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.top-row { display: flex; justify-content: space-between; align-items: center; }
+.badge   { color: #ffe89a; font-size: 13px; }
+.bar     { position: relative; height: 6px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.barfill { position: absolute; inset: 0; width: 50%; background: linear-gradient(90deg,#5a7cff,#7fa1ff); }
+
+.mini-list  { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.mini-item  { padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); }
+.mini-title { display: flex; justify-content: space-between; align-items: center; }
+.mini-text  { margin: 0; color: #eaf1ff; }
