@@ -2,11 +2,11 @@ package com.example.carapp.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public class ServiceCenterRequest {
-    @NotBlank private String name;
-    @NotBlank private String city;
-    @NotBlank private String address;
-    private String placeId; // opcionális
+public class ServiceCenterRequest { // -> KLIENS → SZERVER: új szervizközpont létrehozásához szükséges adatok
+    @NotBlank private String name; // -> KÖTELEZŐ: név
+    @NotBlank private String city; // -> KÖTELEZŐ: város
+    @NotBlank private String address; // -> KÖTELEZŐ: cím
+    private String placeId; // -> opcionális
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

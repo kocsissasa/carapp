@@ -8,12 +8,12 @@ package com.example.carapp.dto;
 
 public class AuthResponse {
 
-    private String token;
+    private String token; // -> A kiállított JWT
 
-    public AuthResponse() {}
+    public AuthResponse() {} // -> Üres konstruktor
 
-    public AuthResponse(String token) {
-        this.token = token;
+    public AuthResponse(String token) { // -> Közvetlen beállításhoz
+        this.token = token;  // -> Mező inicializálása
     }
 
     public String getToken() {

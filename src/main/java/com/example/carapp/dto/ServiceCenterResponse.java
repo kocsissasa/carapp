@@ -1,12 +1,13 @@
 package com.example.carapp.dto;
 
-public class ServiceCenterResponse {
-    private Long id;
-    private String name;
-    private String city;
-    private String address;
-    private String placeId;
+public class ServiceCenterResponse { // -> SZERVER → KLIENS: szervizközpont adatai
+    private Long id; // -> Egyedi azonosító
+    private String name; // -> Központ neve
+    private String city; // -> Város
+    private String address; // -> Cím
+    private String placeId; // -> Opcionális térkép ID
 
+    // --- Getters: SZERIALIZÁLÁS (objektum -> JSON) Jackson ezeken olvas ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }

@@ -4,21 +4,23 @@ import com.example.carapp.model.ForumCategory;
 
 import java.time.LocalDateTime;
 
-public class PostResponse {
-    private Long id;
-    private Long authorId;
-    private String authorName;
+public class PostResponse { // Kimenő DTO egy fórumposzthoz
+    private Long id; // Poszt azonosító (DB id)
+    private Long authorId; // Szerző felhasználó ID-ja
+    private String authorName; // Szerző megjelenítendő neve
 
     private String title;          // lehet null
-    private String content;
+    private String content;  // Poszt szövegtartalma
 
-    private ForumCategory category;
+    private ForumCategory category; // Kategória (enum)
     private Integer rating;        // lehet null
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private LocalDateTime createdAt; // Létrehozás ideje
+    private LocalDateTime updatedAt; // Utolsó módosítás ideje
 
-    // getters/setters
+    // --- Getters/Setters ---
+    // SZERIALIZÁLÁS: Jackson ezeken a getteren keresztül olvassa ki a JSON-hoz
+    // DESZERIALIZÁLÁS: Ha a jövőben JSON-ből olvasnánk
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

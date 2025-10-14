@@ -4,10 +4,10 @@ package com.example.carapp.dto;
 import com.example.carapp.model.ReactionType;
 import java.util.Map;
 
-public class ReactionSummary {
-    private Long postId;
-    private Map<ReactionType, Long> counts;
-    private ReactionType myReaction;
+public class ReactionSummary { // -> Egy poszthoz tartozó reakciók összegzése + a bejelentkezett user saját reakciója
+    private Long postId; // -> Melyik poszt azonosítójáról szól az összesítés
+    private Map<ReactionType, Long> counts; // -> Összesítés:
+    private ReactionType myReaction; // -> A bejelentkezett felhasználó saját reakciója
 
     public Long getPostId() { return postId; }
     public void setPostId(Long postId) { this.postId = postId; }
