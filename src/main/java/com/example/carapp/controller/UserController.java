@@ -24,8 +24,8 @@ import java.util.List;
 @RequestMapping("/api/users")
 public class UserController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository; // -> Adatbázis műveletek
+    private final PasswordEncoder passwordEncoder;  // -> Jelszó hash-elés
 
     public UserController(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
@@ -40,32 +40,32 @@ public class UserController {
 
     @PostMapping("")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest req,
-                                                   UriComponentsBuilder uriBuilder) {
-        User entity = UserMapper.toEntity(req);
-        entity.setPassword(passwordEncoder.encode(entity.getPassword()));
-        User saved = userRepository.save(entity);
+                                                   UriComponentsBuilder uriBuilder) { // -> Location header építéséhez
+        User entity = UserMapper.toEntity(req); // -> DTO → Entity
+        entity.setPassword(passwordEncoder.encode(entity.getPassword())); // -> Jelszó hash-elése
+        User saved = userRepository.save(entity); // -> Mentés DB-be
 
-        URI location = uriBuilder.path("/api/users/{id}")
+        URI location = uriBuilder.path("/api/users/{id}") // -> Location header: az új erőforrás URL-je
                 .buildAndExpand(saved.getId()).toUri();
-        return ResponseEntity.created(location).body(UserMapper.toResponse(saved));
+        return ResponseEntity.created(location).body(UserMapper.toResponse(saved)); // -> 201 Created + Location + Kimenő DTO (jelszó nélkül)
     }
 
     // Az összes USER lekérése -> 200 OK
     @GetMapping("")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        List<UserResponse> list = userRepository.findAll()
+        List<UserResponse> list = userRepository.findAll() // -> Összes user
                 .stream()
-                .map(UserMapper::toResponse)
+                .map(UserMapper::toResponse) // -> Entity → DTO (jelszó nélkül)
                 .toList();
-        return ResponseEntity.ok(list);
+        return ResponseEntity.ok(list); // -> 200 OK
     }
 
     // ID alapján USER lekérése, ha OK -> 200 OK, ha nem található -> 404 Not Found
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-        return userRepository.findById(id)
-                .map(user -> ResponseEntity.ok(UserMapper.toResponse(user)))
-                .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build());
+        return userRepository.findById(id) // -> Optional<User>
+                .map(user -> ResponseEntity.ok(UserMapper.toResponse(user))) // -> 200 OK + DTO
+                .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build()); // -> 404
     }
 
     /**
@@ -75,30 +75,30 @@ public class UserController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
-                                                   @Valid @RequestBody UserRequest req) {
-        return userRepository.findById(id)
+                                                   @Valid @RequestBody UserRequest req) { // -> Validált bejövő DTO
+        return userRepository.findById(id) // -> Meglévő user keresése
                 .map(u -> {
-                    u.setName(req.getName());
-                    u.setEmail(req.getEmail());
+                    u.setName(req.getName()); // -> Név frissítése
+                    u.setEmail(req.getEmail()); // -> Email frissítése
 
                     // jelszó csak akkor frissül, ha ténylegesen került létrehozásra új
                     if (req.getPassword() != null && !req.getPassword().isBlank()) {
-                        u.setPassword(passwordEncoder.encode(req.getPassword()));
+                        u.setPassword(passwordEncoder.encode(req.getPassword())); // -> Hash újra
                     }
-                    User saved = userRepository.save(u);
-                    return ResponseEntity.ok(UserMapper.toResponse(saved));
+                    User saved = userRepository.save(u); // -> Mentés
+                    return ResponseEntity.ok(UserMapper.toResponse(saved)); // -> 200 OK + DTO
                 })
-                .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build());
+                .orElseGet(() -> ResponseEntity.<UserResponse>notFound().build()); // -> 404, ha nincs ilyen user
     }
 
     // DELETE ID alapján -> 204,ha OK vagy 404, ha NOT Found
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        return userRepository.findById(id)
+        return userRepository.findById(id) // -> Keresés ID alapján
                 .map(u -> {
-                    userRepository.deleteById(id);
-                    return ResponseEntity.noContent().<Void>build();
+                    userRepository.deleteById(id); // -> Törlés
+                    return ResponseEntity.noContent().<Void>build(); // -> 204 No Content
                 })
-                .orElseGet(() -> ResponseEntity.<Void>notFound().build());
+                .orElseGet(() -> ResponseEntity.<Void>notFound().build()); // -> 404
     }
 }

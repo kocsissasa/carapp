@@ -47,7 +47,7 @@ public class DataSeeder {
             ServiceAppointment a1 = new ServiceAppointment();
             a1.setUser(anna);
             a1.setCar(corsa);
-            a1.setCenter(sc1); // <- most már elérhető, mert kívül hoztuk létre
+            a1.setCenter(sc1); // <- most már elérhető
             a1.setServiceDateTime(LocalDateTime.now().plusDays(7).withHour(10).withMinute(0));
             a1.setDescription("Olajcsere + átvizsgálás");
             a1.setStatus(AppointmentStatus.PENDING);

@@ -18,93 +18,87 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/** Ez az osztály kezeli a biztonsági beállításokat:
- * -JWT alapú hitelesítés
- * -Jogosultságok
- * CORS engedélyezés frontendhez
- */
-
 @Configuration
-@EnableWebSecurity
+@EnableWebSecurity  // -> Engedélyezi a Spring Security-t a webes környezetben
 public class SecurityConfig {
 
+    // -> JWT tokenek ellenőrzésére szolgáló egyedi szűrő
     private final JwtAuthFilter jwtAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
 
-    // Meghatározza, hogy mely végpontokat ki és hogyan érhet el
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // -> A fő biztonsági konfigurációk megadása
         http
-                // Frontend felől érkező kérések
+                // CORS + CSRF
                 .cors(Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable()) // -> CSRF kikapcsolása, mert JWT-vel stateless
 
-                // CSRF védelem kikapcsolása
-                .csrf(csrf -> csrf.disable())
-
-                // JWT alapú hitelesítés van a "session" helyett
+                // Stateless kezelése
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Nem tárolunk session-öket, JWT auth történik mindig
 
                 // Jogosultsági szabályok
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+                        // --- Auth endpointok (login, register) ---
+                        .requestMatchers("/api/auth/**").permitAll() // -> Auth útvonalak nyitottak
+                        .requestMatchers(HttpMethod.POST, "/api/users").permitAll() // -> regisztráció is
 
-                        .requestMatchers(HttpMethod.GET, "/api/cars").permitAll()
+                        // --- Szervizközpontok (centers) ---
+                        .requestMatchers(HttpMethod.GET, "/api/centers", "/api/centers/top").permitAll() // -> Listázás bárkinek
+                        .requestMatchers(HttpMethod.POST, "/api/centers/*/vote").authenticated() // -> Szavazáshoz bekell lépni
+                        .requestMatchers("/api/centers/**").hasAuthority("ADMIN") // -> törléshez és módosításhoz ADMIN role
 
+                        // --- Fórum (forum) ---
+                        .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll() // -> Fórum nyilvános
+                        .requestMatchers(HttpMethod.POST, "/api/forum/**").authenticated() // -> Írás csak bejelentkezett user számára
+                        .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()  // -> Módosítás auth-hoz kötött
+                        .requestMatchers(HttpMethod.DELETE, "/api/forum/**").authenticated() // -> Törlés auth-hoz kötött
+                        
+
+                        // Reakciók – publikus lekérdezés, írás/törlés auth
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/forum/posts/*/reactions").permitAll() // -> Reakciók lekérdezése publikus
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/forum/posts/*/react").authenticated() // -> Reagálni csak login-nal lehet
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/forum/posts/*/react").authenticated()  // -> saját reakció törlése auth-hoz kötött
+
+                        // Admin útvonalak csak ADMIN jogosultsággal elérhetőek
                         .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
 
-                        .requestMatchers("/api/cars/**").authenticated()
-                        .requestMatchers("/api/appointments/**").authenticated()
-                        .requestMatchers("/api/users/**").authenticated()
-
-                        .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/forum/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/forum/**").authenticated()
-
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/forum/posts/*/reactions").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/forum/posts/*/react").authenticated()
-                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/forum/posts/*/react").authenticated()
-
-                        // <<< EZ LEGYEN AZ ADMIN ELŐTT / FELETT, hogy ne nyelje el
-                        .requestMatchers(HttpMethod.POST, "/api/centers/*/vote").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/centers", "/api/centers/top").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/centers/**").hasAuthority("ADMIN")
-
-                        .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
-
+                        // Egyéb kérések
                         .anyRequest().permitAll()
 
                 )
-                // Token ellenőrzések kérések előtt
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+                // --- JWT filter beillesztése ---
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // -> Minden kérést ellenőríz
 
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        //  CORS beállítások megadása a frontend eléréséhez
         CorsConfiguration config = new CorsConfiguration();
-        // Ha több origin kell, add őket a listához
-        config.setAllowedOrigins(List.of("http://localhost:5173"));  // frontend portja
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true); // Authorization header engedélyezése
+        config.setAllowedOrigins(List.of("http://localhost:5173")); // Frontend origin
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); // Engedélyezett HTTP metódusok
+        config.setAllowedHeaders(List.of("*")); // Headerek engedélyezettek(auth)
+        config.setAllowCredentials(true); // Sütik küldése enabled
 
+        // -> A konfig alkalmazása minden útvonalra
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
     }
 
-    // Jelszavak hash-elésére szolgál, az adatbázisban minden jelszó hash-elve tárolódik
     @Bean
     public PasswordEncoder passwordEncoder() {
+
+        // BCrypt algoritmus használata a jelszavak titkosításához
         return new BCryptPasswordEncoder();
     }
 }
