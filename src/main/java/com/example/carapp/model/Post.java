@@ -5,36 +5,37 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "forum_posts")
+@Entity  // -> Ez az osztály egy perzisztens JPA entitás
+@Table(name = "forum_posts") // -> DB tábla neve: forum_posts
 public class Post {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) // -> Elsődleges kulcs
     private Long id;
 
-    @ManyToOne(optional = false) @JoinColumn(name = "author_id")
+    @ManyToOne(optional = false) @JoinColumn(name = "author_id") // -> több poszt tartozhat egy Userhez
     private User author;
 
-    @Size(max = 120)
+    @Size(max = 120) // -> Cím max. 120 karakter lehet
     private String title; // opcionális
 
-    @NotBlank
+    @NotBlank // -> Tartalom kötelező
     @Column(nullable = false, length = 2000)
     private String content;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ForumCategory category = ForumCategory.GENERAL;
+    @Enumerated(EnumType.STRING) // -> Enum értéket szövegként tároljuk
+    @Column(nullable = false) // -> Nem lehet null
+    private ForumCategory category = ForumCategory.GENERAL; // -> Alapértelmezett kategória
 
     private Integer rating; // opcionális (1–5)
 
-    @Column(nullable = false) private LocalDateTime createdAt;
-    @Column(nullable = false) private LocalDateTime updatedAt;
+    @Column(nullable = false) private LocalDateTime createdAt; // -> Létrehozás időpontja
+    @Column(nullable = false) private LocalDateTime updatedAt; // -> Utolsó módosítás időpontja
+
 
     @PrePersist
     void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = this.createdAt;
-        if (this.category == null) this.category = ForumCategory.GENERAL;
+        this.createdAt = LocalDateTime.now(); // -> createdAt beállítása mostani időre
+        this.updatedAt = this.createdAt;  // -> updatedAt = createdAt
+        if (this.category == null) this.category = ForumCategory.GENERAL; // -> null esetén is legyen DEFAULT
     }
 
     @PreUpdate
