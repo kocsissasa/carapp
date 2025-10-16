@@ -1,4 +1,3 @@
-// src/pages/Garage.tsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
 import { getToken, parseJwt } from "../utils/auth";
@@ -9,7 +8,7 @@ type Car = {
   brand: string;
   model: string;
   year: number;
-  owner?: { email?: string };
+  owner?: { email?: string; id?: number };
 };
 
 type ServiceCenter = {
@@ -23,11 +22,12 @@ type ServiceCenter = {
 
 type Appointment = {
   id: number;
-  serviceDateTime: string;
+  serviceDateTime: string; // ISO string
   description: string;
   status?: "PENDING" | "CONFIRMED" | "CANCELLED";
   car?: Car;
-  center?: ServiceCenter; // megjelenítéshez opcionális
+  center?: ServiceCenter;
+  userId?: number;          // (ha a backend visszaadja) – tulaj azonosításhoz
 };
 
 type Tab = "create" | "edit";
@@ -36,138 +36,87 @@ type Tab = "create" | "edit";
 const H_START = 8;
 const H_END = 18;
 
-/* ===== Background (public/garage.jpg) ===== */
-const bgUrl = "/garage.jpg"; // a kép a frontend/public mappában legyen!
-const bgLayer: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: -1,
-  background: `
-    linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)),
-    url('${bgUrl}') center / cover no-repeat
-  `,
-};
+/* ===== Background (public/garagefinal.jpg) ===== */
+const bgUrl = `${import.meta.env.BASE_URL}garagefinal.jpg`;
 
-/* ===== Page layout ===== */
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  width: "100%",
-  margin: 0,
-  padding: 0,
-  overflowX: "hidden",
-  position: "relative",
-  zIndex: 1,
-};
+/* ===== Colors ===== */
+const ORANGE1 = "#ff7a00";
+const ORANGE2 = "#ff4d00";
+const ORANGE_BORDER = "rgba(255, 122, 0, .45)";
+const ORANGE_BORDER_SOFT = "rgba(255, 122, 0, .25)";
 
-/* ===== UI styles ===== */
-const title: React.CSSProperties = {
-  textAlign: "center",
-  fontSize: "2.2rem",
-  fontWeight: 900,
-  margin: "20px 0 30px",
-  background: "linear-gradient(90deg,#ff6b6b,#feca57,#1dd1a1)",
-  WebkitBackgroundClip: "text",
-  WebkitTextFillColor: "transparent",
-};
+/* ===== Toast mini system ===== */
+type Toast = { id: number; text: string; tone?: "info" | "warn" | "error" };
+function useToasts() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const notify = (text: string, tone: Toast["tone"] = "info") => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, text, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+  };
+  return { toasts, notify };
+}
 
-const card: React.CSSProperties = {
-  background: "rgba(17,17,17,.9)",
-  border: "1px solid rgba(255,255,255,.08)",
-  borderRadius: 12,
-  padding: 12,
-  overflow: "hidden",
-  color: "#fff",
-};
+/* ===== Pretty confirm ===== */
+function ConfirmModal({
+  open,
+  text,
+  onYes,
+  onNo,
+}: {
+  open: boolean;
+  text: string;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={styles.modalBack}>
+      <div style={styles.modalCard}>
+        <div style={{ fontWeight: 900, marginBottom: 6 }}>Biztos vagy benne?</div>
+        <div style={{ opacity: 0.92, marginBottom: 12 }}>{text}</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onNo} style={styles.btnGhost}>
+            Mégse
+          </button>
+          <button onClick={onYes} className="btn-anim">
+            Igen, töröld
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-const inp: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  display: "block",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid rgba(255,255,255,.12)",
-  background: "rgba(255,255,255,.06)",
-  color: "#fff",
-  outline: "none",
-};
-
-const selectInp: React.CSSProperties = {
-  ...inp,
-  color: "#fff",
-  background: "rgba(30,30,30,.95)",
-  borderColor: "rgba(255,255,255,.18)",
-};
-
-const btn: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "linear-gradient(90deg,#6c5ce7,#a66cff)",
-  border: "none",
-  color: "#fff",
-  fontWeight: 700,
-  padding: "10px 14px",
-  borderRadius: 10,
-  cursor: "pointer",
-};
-
-const dangerBtn: React.CSSProperties = {
-  ...btn,
-  background: "transparent",
-  border: "1px solid #ff4d4f",
-  color: "#ff4d4f",
-};
-
-const smallBtn: React.CSSProperties = {
-  ...btn,
-  width: "auto",
-  padding: "6px 10px",
-  fontWeight: 600,
-};
-
-const tabBtn: React.CSSProperties = {
-  ...smallBtn,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.12)",
-};
-
-const tabActive: React.CSSProperties = {
-  background: "linear-gradient(90deg,#6c5ce7,#a66cff)",
-  borderColor: "transparent",
-};
-
-const hr: React.CSSProperties = {
-  margin: "14px 0",
-  borderColor: "rgba(255,255,255,.08)",
-};
-
-const apptPill: React.CSSProperties = {
-  background: "rgba(108,92,231,.2)",
-  border: "1px solid rgba(108,92,231,.45)",
-  borderRadius: 8,
-  padding: 8,
-  display: "grid",
-  gap: 4,
-};
-
-const pillBtn: React.CSSProperties = {
-  boxSizing: "border-box",
-  background: "transparent",
-  border: "1px solid #ff8787",
-  color: "#ff8787",
-  padding: "4px 8px",
-  borderRadius: 6,
-  width: "fit-content",
-  cursor: "pointer",
-  fontSize: 12,
-};
+/* =================================================================== */
 
 export default function Garage() {
   const token = getToken();
   const jwt = parseJwt();
-  const myEmail = jwt?.email || jwt?.sub || localStorage.getItem("email") || "";
+
+  const myEmail =
+    (jwt as any)?.email ||
+    (jwt as any)?.sub ||
+    localStorage.getItem("email") ||
+    "";
+
+  // admin detektálása – elfogadjuk: ADMIN vagy ROLE_ADMIN
+  const roles: string[] = Array.isArray((jwt as any)?.roles)
+    ? (jwt as any).roles
+    : typeof (jwt as any)?.role === "string"
+    ? [(jwt as any).role]
+    : [];
+  const isAdmin = roles.some((r) =>
+    String(r).toUpperCase().includes("ADMIN")
+  );
+
+  const { toasts, notify } = useToasts();
 
   // UI
   const [tab, setTab] = useState<Tab>("create");
+  const [confirm, setConfirm] = useState<{ open: boolean; id?: number }>({
+    open: false,
+  });
 
   // Autók
   const [cars, setCars] = useState<Car[]>([]);
@@ -182,7 +131,7 @@ export default function Garage() {
   const [editYear, setEditYear] = useState<number | "">("");
 
   // Időpontok
-  const [mine, setMine] = useState<Appointment[]>([]);
+  const [appts, setAppts] = useState<Appointment[]>([]);
   const [pickedCarId, setPickedCarId] = useState<number | "">("");
   const [dt, setDt] = useState<string>("");
   const [desc, setDesc] = useState("");
@@ -194,44 +143,75 @@ export default function Garage() {
   // Heti naptár
   const [weekAnchor, setWeekAnchor] = useState(firstDayOfWeek(new Date()));
 
+  /* ===== Global CSS (animációk + utility classok) ===== */
+  const GlobalCSS = (
+    <style>{`
+      :root { --o1:${ORANGE1}; --o2:${ORANGE2}; }
+
+      @keyframes bgFade { 0%{opacity:0;transform:scale(1.02)} 100%{opacity:1;transform:scale(1)} }
+      .garage-bg{
+        position:fixed; inset:0; z-index:0;
+        background: linear-gradient(rgba(0,0,0,.52), rgba(0,0,0,.58)), url('${bgUrl}') center / cover no-repeat;
+        animation: bgFade .9s ease both;
+      }
+
+      @keyframes gradientShift{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+      @keyframes glowPulse{0%{box-shadow:0 0 14px rgba(255,100,0,.25)}50%{box-shadow:0 0 28px rgba(255,120,0,.55)}100%{box-shadow:0 0 14px rgba(255,100,0,.25)}}
+
+      .btn-anim{
+        background: linear-gradient(90deg,var(--o1),var(--o2),var(--o1));
+        background-size:200% 200%;
+        animation: gradientShift 8s ease infinite, glowPulse 3.5s ease-in-out infinite;
+        border:1px solid ${ORANGE_BORDER};
+        color:#1b0f08; font-weight:800; padding:10px 14px; border-radius:10px; cursor:pointer;
+        transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+      }
+      .btn-anim.small{padding:6px 10px}
+      .btn-anim:hover{transform:translateY(-1px) scale(1.02); filter:brightness(1.06)}
+      .btn-anim:active{transform:translateY(0) scale(.995); filter:brightness(.98)}
+
+      .gar-inp { transition: box-shadow .18s ease, border-color .18s ease; }
+      .gar-inp:focus { box-shadow: 0 0 0 3px rgba(255,120,0,.25), 0 0 16px rgba(255,120,0,.35); border-color:${ORANGE_BORDER}; }
+    `}</style>
+  );
+
   /* ===== Lifecycle ===== */
   useEffect(() => {
     if (!token) return;
     (async () => {
       await Promise.all([loadCars(), loadAppointments(), loadCenters()]);
     })();
-  }, [token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAdmin]);
 
   const loadCars = async () => {
     const res = await api.get<Car[]>("/api/cars");
     const all = res.data || [];
-    const mineOnly = myEmail ? all.filter((c) => c.owner?.email === myEmail) : all;
-    setCars(mineOnly);
+    setCars(isAdmin ? all : all.filter((c) => c.owner?.email === myEmail));
   };
 
   const loadAppointments = async () => {
-    const res = await api.get<Appointment[]>("/api/appointments/me");
-    const appts = (res.data || []).slice().sort((a, b) =>
+    const url = isAdmin ? "/api/appointments" : "/api/appointments/me";
+    const res = await api.get<Appointment[]>(url);
+    const list = (res.data || []).slice().sort((a, b) =>
       a.serviceDateTime.localeCompare(b.serviceDateTime)
     );
-    setMine(appts);
+    setAppts(list);
   };
 
-  // SecurityConfig: GET /api/centers publikus
   const loadCenters = async () => {
     try {
       const res = await api.get<ServiceCenter[]>("/api/centers");
       setCenters(res.data || []);
-    } catch (e: any) {
-      console.warn("Service centers GET failed:", e?.response?.status, e?.response?.data);
+    } catch {
       setCenters([]);
     }
   };
 
-  /* ===== Autó létrehozás ===== */
+  /* ===== Autó létrehozás/módosítás/törlés ===== */
   const addCar = async () => {
     if (!carBrand.trim() || !carModel.trim() || !carYear) {
-      alert("Gyártó, modell és évjárat kötelező.");
+      notify("Gyártó, modell és évjárat kötelező.", "warn");
       return;
     }
     const payload = { brand: carBrand.trim(), model: carModel.trim(), year: Number(carYear) };
@@ -239,57 +219,52 @@ export default function Garage() {
       await api.post("/api/cars", payload);
       setCarBrand(""); setCarModel(""); setCarYear("");
       await loadCars();
-      alert("Autó hozzáadva!");
+      notify("Autó hozzáadva!");
     } catch (e: any) {
-      alert(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült hozzáadni az autót.");
+      notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült hozzáadni az autót.", "error");
     }
   };
 
-  /* ===== Autó módosítás/törlés ===== */
   useEffect(() => {
-    if (!editCarId) {
-      setEditBrand(""); setEditModel(""); setEditYear("");
-      return;
-    }
+    if (!editCarId) { setEditBrand(""); setEditModel(""); setEditYear(""); return; }
     const c = cars.find((x) => x.id === editCarId);
-    if (c) {
-      setEditBrand(c.brand);
-      setEditModel(c.model);
-      setEditYear(c.year);
-    }
+    if (c) { setEditBrand(c.brand); setEditModel(c.model); setEditYear(c.year); }
   }, [editCarId, cars]);
 
   const updateCar = async () => {
-    if (!editCarId) return alert("Válassz autót!");
+    if (!editCarId) return notify("Válassz autót!", "warn");
     if (!editBrand.trim() || !editModel.trim() || !editYear) {
-      return alert("Gyártó, modell, évjárat kötelező.");
+      return notify("Gyártó, modell, évjárat kötelező.", "warn");
     }
     const payload = { brand: editBrand.trim(), model: editModel.trim(), year: Number(editYear) };
     try {
       await api.put(`/api/cars/${editCarId}`, payload);
       await loadCars();
-      alert("Autó módosítva!");
+      notify("Autó módosítva!");
     } catch (e: any) {
-      alert(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült módosítani.");
+      notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült módosítani.", "error");
     }
   };
 
-  const deleteCar = async () => {
-    if (!editCarId) return alert("Válassz autót!");
-    if (!confirm("Biztosan törlöd ezt az autót?")) return;
+  const askDeleteCar = () => {
+    if (!editCarId) return notify("Válassz autót!", "warn");
+    setConfirm({ open: true, id: Number(editCarId) });
+  };
+  const doDeleteCar = async () => {
+    const id = confirm.id!;
+    setConfirm({ open: false });
     try {
-      await api.delete(`/api/cars/${editCarId}`);
+      await api.delete(`/api/cars/${id}`);
       setEditCarId("");
       await Promise.all([loadCars(), loadAppointments()]);
-      alert("Autó törölve!");
+      notify("Autó törölve.");
     } catch (e: any) {
-      alert(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült törölni.");
+      notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült törölni.", "error");
     }
   };
 
   /* ===== Időpont létrehozás / törlés ===== */
   const withSeconds = (v: string) => (v && v.length === 16 ? `${v}:00` : v);
-
   const extractErr = (e: any) => {
     const s = e?.response?.status;
     const d = e?.response?.data;
@@ -297,54 +272,54 @@ export default function Garage() {
   };
 
   const createAppt = async () => {
-    if (!pickedCarId || !dt) return alert("Válassz autót és időpontot.");
-    if (!pickedCenterId) return alert("Válassz szervizt is.");
+    if (!pickedCarId || !dt) return notify("Válassz autót és időpontot.", "warn");
+    if (!pickedCenterId) return notify("Válassz szervizt is.", "warn");
 
     const cid = Number(pickedCarId);
     const centerId = Number(pickedCenterId);
-
     const pickedCenter = centers.find((c) => c.id === centerId);
     const description = pickedCenter
       ? `${desc || ""}${desc ? " · " : ""}Szerviz: ${pickedCenter.name}`
       : (desc || "");
 
-    // >>> a backend ezt várja: center: { id }
     const payload = {
       car: { id: cid },
-      serviceDateTime: dt,         // "YYYY-MM-DDTHH:mm"
+      serviceDateTime: dt,
       description,
-      center: { id: centerId },    // KÖTELEZŐ
+      center: { id: centerId },
     };
 
     try {
       await api.post("/api/appointments", payload);
       setDesc(""); setDt(""); setPickedCenterId("");
       await loadAppointments();
-      alert("Időpont felvéve!");
+      notify("Időpont felvéve!");
     } catch (e1: any) {
       if (e1?.response?.status === 400) {
         try {
           await api.post("/api/appointments", { ...payload, serviceDateTime: withSeconds(dt) });
           setDesc(""); setDt(""); setPickedCenterId("");
           await loadAppointments();
-          alert("Időpont felvéve!");
+          notify("Időpont felvéve!");
           return;
         } catch (e2: any) {
-          alert(extractErr(e2));
-          return;
+          return notify(extractErr(e2), "error");
         }
       }
-      alert(extractErr(e1));
+      notify(extractErr(e1), "error");
     }
   };
 
-  const cancelAppt = async (id: number) => {
-    if (!confirm("Biztosan törlöd/lemondod?")) return;
+  const askCancelAppt = (id: number) => setConfirm({ open: true, id });
+  const doCancelAppt = async () => {
+    const id = confirm.id!;
+    setConfirm({ open: false });
     try {
       await api.delete(`/api/appointments/${id}`);
       await loadAppointments();
+      notify("Időpont törölve.");
     } catch (e: any) {
-      alert(extractErr(e) || "Nem sikerült törölni.");
+      notify(extractErr(e) || "Nem sikerült törölni.", "error");
     }
   };
 
@@ -361,17 +336,37 @@ export default function Garage() {
 
   const apptsByDayHour = useMemo(() => {
     const map = new Map<string, Appointment[]>();
-    mine.forEach((a) => {
+    appts.forEach((a) => {
       const dt = new Date(a.serviceDateTime);
       const k = keyDayHour(dt);
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(a);
     });
     return map;
-  }, [mine]);
+  }, [appts]);
 
+  /* ===== NOT LOGGED IN ===== */
   if (!token) {
-    return <div style={{ padding: 16, color: "#fff" }}>Jelentkezz be az autóidhoz és az időpontok kezeléséhez.</div>;
+    return (
+      <>
+        {GlobalCSS}
+        <div className="garage-bg" />
+        <div style={styles.notLoggedWrap}>
+          <div style={styles.notLoggedCard}>
+            <div style={{ fontWeight: 900, fontSize: 20, marginBottom: 6 }}>
+              🔒 Bejelentkezés szükséges
+            </div>
+            <div style={{ opacity: 0.95, marginBottom: 12 }}>
+              A garázs és a szervizidőpontok megtekintéséhez kérjük{" "}
+              <a href="/login" style={styles.linkStrong}>jelentkezz be</a>.
+            </div>
+            <a href="/login" className="btn-anim" style={{ textDecoration: "none" }}>
+              Bejelentkezés
+            </a>
+          </div>
+        </div>
+      </>
+    );
   }
 
   const nowLocalMin = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
@@ -380,123 +375,88 @@ export default function Garage() {
 
   return (
     <>
-      {/* reset + select/option olvashatóság */}
-      <style>{`
-        html, body { margin:0; padding:0; width:100%; overflow-x:hidden; background:#000; }
-        #root { max-width:100% !important; margin:0 !important; padding:0 !important; }
-        select, option { color:#fff; background-color:#1f1f1f; }
-      `}</style>
+      {GlobalCSS}
 
-      <div style={bgLayer} />
+      {/* toast-ok */}
+      <div style={styles.toastWrap} aria-live="polite">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            style={{
+              ...styles.toast,
+              ...(t.tone === "warn" ? styles.toastWarn : t.tone === "error" ? styles.toastError : {}),
+            }}
+          >
+            {t.text}
+          </div>
+        ))}
+      </div>
 
-      <div style={page}>
+      {/* háttér */}
+      <div className="garage-bg" />
+
+      <div style={styles.page}>
         <div style={{ padding: 16, maxWidth: 1400, margin: "0 auto" }}>
-          <h1 style={title}>🚗 Saját Garázs & Szervizidőpontok</h1>
+          <h1 style={styles.title}>🚗 Saját Garázs & Szervizidőpontok {isAdmin && <span style={styles.adminBadge}>ADMIN</span>}</h1>
 
           <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
             {/* BAL – Autóim, fülek */}
-            <div style={card}>
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Autóim</div>
+            <div style={styles.card}>
+              <div style={{ fontWeight: 800, marginBottom: 8 }}>
+                Autóim {isAdmin && <span style={styles.muted}>(összes)</span>}
+              </div>
+
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 {cars.map((c) => (
                   <li key={c.id} style={{ marginBottom: 4 }}>
                     {c.brand} {c.model} ({c.year})
+                    {isAdmin && c.owner?.email ? <span style={styles.muted}> · {c.owner.email}</span> : null}
                   </li>
                 ))}
-                {cars.length === 0 && <li>Még nincs autód.</li>}
+                {cars.length === 0 && <li>Még nincs autó.</li>}
               </ul>
 
-              <hr style={hr} />
+              <hr style={styles.hr} />
 
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button
-                  onClick={() => setTab("create")}
-                  style={{ ...tabBtn, ...(tab === "create" ? tabActive : {}) }}
-                >
-                  Új autó
-                </button>
-                <button
-                  onClick={() => setTab("edit")}
-                  style={{ ...tabBtn, ...(tab === "edit" ? tabActive : {}) }}
-                >
-                  Autó módosítása
-                </button>
+                <button onClick={() => setTab("create")} className="btn-anim small">Új autó</button>
+                <button onClick={() => setTab("edit")} className="btn-anim small" style={{ filter: tab === "edit" ? "brightness(1.08)" : undefined }}>Autó módosítása</button>
               </div>
 
               {tab === "create" && (
                 <div style={{ display: "grid", gap: 8 }}>
-                  <input
-                    placeholder="Gyártó (pl. Opel)"
-                    value={carBrand}
-                    onChange={(e) => setCarBrand(e.target.value)}
-                    style={inp}
-                  />
-                  <input
-                    placeholder="Modell (pl. Vectra B2)"
-                    value={carModel}
-                    onChange={(e) => setCarModel(e.target.value)}
-                    style={inp}
-                  />
-                  <input
-                    placeholder="Évjárat (pl. 1999)"
-                    value={carYear}
-                    onChange={(e) => setCarYear(e.target.value ? Number(e.target.value) : "")}
-                    type="number"
-                    style={inp}
-                  />
-                  <button onClick={addCar} style={btn}>Hozzáadás</button>
+                  <input placeholder="Gyártó (pl. Opel)" value={carBrand} onChange={(e) => setCarBrand(e.target.value)} style={styles.inp} className="gar-inp" />
+                  <input placeholder="Modell (pl. Vectra B2)" value={carModel} onChange={(e) => setCarModel(e.target.value)} style={styles.inp} className="gar-inp" />
+                  <input placeholder="Évjárat (pl. 1999)" value={carYear} onChange={(e) => setCarYear(e.target.value ? Number(e.target.value) : "")} type="number" style={styles.inp} className="gar-inp" />
+                  <button onClick={addCar} className="btn-anim">Hozzáadás</button>
                 </div>
               )}
 
               {tab === "edit" && (
                 <div style={{ display: "grid", gap: 8 }}>
-                  <select
-                    value={editCarId}
-                    onChange={(e) => setEditCarId(e.target.value ? Number(e.target.value) : "")}
-                    style={selectInp}
-                  >
+                  <select value={editCarId} onChange={(e) => setEditCarId(e.target.value ? Number(e.target.value) : "")} style={styles.selectInp} className="gar-inp">
                     <option value="">Válassz autót…</option>
                     {cars.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.brand} {c.model} ({c.year})
+                        {c.brand} {c.model} ({c.year}){isAdmin && c.owner?.email ? ` — ${c.owner.email}` : ""}
                       </option>
                     ))}
                   </select>
-                  <input
-                    placeholder="Gyártó"
-                    value={editBrand}
-                    onChange={(e) => setEditBrand(e.target.value)}
-                    style={inp}
-                  />
-                  <input
-                    placeholder="Modell"
-                    value={editModel}
-                    onChange={(e) => setEditModel(e.target.value)}
-                    style={inp}
-                  />
-                  <input
-                    placeholder="Évjárat"
-                    type="number"
-                    value={editYear}
-                    onChange={(e) => setEditYear(e.target.value ? Number(e.target.value) : "")}
-                    style={inp}
-                  />
+                  <input placeholder="Gyártó" value={editBrand} onChange={(e) => setEditBrand(e.target.value)} style={styles.inp} className="gar-inp" />
+                  <input placeholder="Modell" value={editModel} onChange={(e) => setEditModel(e.target.value)} style={styles.inp} className="gar-inp" />
+                  <input placeholder="Évjárat" type="number" value={editYear} onChange={(e) => setEditYear(e.target.value ? Number(e.target.value) : "")} style={styles.inp} className="gar-inp" />
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={updateCar} style={{ ...btn, flex: 1 }}>Mentés</button>
-                    <button onClick={deleteCar} style={{ ...dangerBtn, flex: 1 }}>Törlés</button>
+                    <button onClick={updateCar} className="btn-anim" style={{ flex: 1 }}>Mentés</button>
+                    <button onClick={askDeleteCar} style={styles.btnDanger} style={{ ...styles.btnDanger, flex: 1 } as any}>Törlés</button>
                   </div>
                 </div>
               )}
 
-              <hr style={hr} />
+              <hr style={styles.hr} />
 
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Új szervizidőpont</div>
               <div style={{ display: "grid", gap: 8 }}>
-                <select
-                  value={pickedCarId}
-                  onChange={(e) => setPickedCarId(e.target.value ? Number(e.target.value) : "")}
-                  style={selectInp}
-                >
+                <select value={pickedCarId} onChange={(e) => setPickedCarId(e.target.value ? Number(e.target.value) : "")} style={styles.selectInp} className="gar-inp">
                   <option value="">Válassz autót…</option>
                   {cars.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -505,11 +465,7 @@ export default function Garage() {
                   ))}
                 </select>
 
-                <select
-                  value={pickedCenterId}
-                  onChange={(e) => setPickedCenterId(e.target.value ? Number(e.target.value) : "")}
-                  style={selectInp}
-                >
+                <select value={pickedCenterId} onChange={(e) => setPickedCenterId(e.target.value ? Number(e.target.value) : "")} style={styles.selectInp} className="gar-inp">
                   <option value="">Válassz szervizt…</option>
                   {centers.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -518,20 +474,9 @@ export default function Garage() {
                   ))}
                 </select>
 
-                <input
-                  type="datetime-local"
-                  value={dt}
-                  onChange={(e) => setDt(e.target.value)}
-                  min={nowLocalMin}
-                  style={inp}
-                />
-                <input
-                  placeholder="Leírás (pl. Olajcsere)"
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  style={inp}
-                />
-                <button onClick={createAppt} style={btn}>Időpont felvétele</button>
+                <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} min={nowLocalMin} style={styles.inp} className="gar-inp" />
+                <input placeholder="Leírás (pl. Olajcsere)" value={desc} onChange={(e) => setDesc(e.target.value)} style={styles.inp} className="gar-inp" />
+                <button onClick={createAppt} className="btn-anim">Időpont felvétele</button>
               </div>
 
               {centers.length === 0 && (
@@ -542,26 +487,20 @@ export default function Garage() {
             </div>
 
             {/* JOBB – heti naptár */}
-            <div style={card}>
+            <div style={styles.card}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <strong>Heti naptár</strong>
+                <strong>Heti naptár {isAdmin && <span style={styles.muted}>(összes időpont)</span>}</strong>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button style={smallBtn} onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>◀ Előző hét</button>
-                  <button style={smallBtn} onClick={() => setWeekAnchor(firstDayOfWeek(new Date()))}>Ma</button>
-                  <button style={smallBtn} onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>Következő hét ▶</button>
+                  <button className="btn-anim small" onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>◀ Előző hét</button>
+                  <button className="btn-anim small" onClick={() => setWeekAnchor(firstDayOfWeek(new Date()))}>Ma</button>
+                  <button className="btn-anim small" onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>Következő hét ▶</button>
                 </div>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "80px repeat(7, 1fr)",
-                  borderBottom: "1px solid rgba(255,255,255,.1)",
-                }}
-              >
+              <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", borderBottom: `1px solid ${ORANGE_BORDER_SOFT}` }}>
                 <div />
                 {daysOfWeek.map((d, i) => (
-                  <div key={i} style={{ padding: "6px 8px", borderLeft: "1px solid rgba(255,255,255,.08)" }}>
+                  <div key={i} style={{ padding: "6px 8px", borderLeft: `1px solid ${ORANGE_BORDER_SOFT}` }}>
                     {dayLabel(d)}
                   </div>
                 ))}
@@ -569,14 +508,7 @@ export default function Garage() {
 
               <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)" }}>
                 {hours.map((h) => (
-                  <div
-                    key={`h-${h}`}
-                    style={{
-                      padding: "6px 8px",
-                      borderBottom: "1px solid rgba(255,255,255,.08)",
-                      opacity: 0.8,
-                    }}
-                  >
+                  <div key={`h-${h}`} style={{ padding: "6px 8px", borderBottom: `1px solid ${ORANGE_BORDER_SOFT}`, opacity: 0.9 }}>
                     {`${h}:00`}
                   </div>
                 ))}
@@ -586,27 +518,32 @@ export default function Garage() {
                       const cellKey = keyDayHour(new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, 0, 0));
                       const items = apptsByDayHour.get(cellKey) || [];
                       return (
-                        <div
-                          key={`${cellKey}`}
-                          style={{
-                            borderLeft: "1px solid rgba(255,255,255,.08)",
-                            borderBottom: "1px solid rgba(255,255,255,.08)",
-                            minHeight: 44,
-                            padding: 6,
-                          }}
-                        >
-                          {items.map((a) => (
-                            <div key={a.id} style={apptPill}>
-                              <div style={{ fontWeight: 700 }}>
-                                {a.car ? `${a.car.brand} ${a.car.model}` : "Autó"}
+                        <div key={`${cellKey}`} style={{ borderLeft: `1px solid ${ORANGE_BORDER_SOFT}`, borderBottom: `1px solid ${ORANGE_BORDER_SOFT}`, minHeight: 44, padding: 6 }}>
+                          {items.map((a) => {
+                            const mineAppt =
+                              a.car?.owner?.email
+                                ? a.car.owner.email === myEmail
+                                : undefined; // ha nincs owner, akkor a backend nem adja – ilyenkor csak admin biztos
+                            const canDelete = isAdmin || !!mineAppt || a.userId === (jwt as any)?.id;
+
+                            return (
+                              <div key={a.id} style={styles.apptPill}>
+                                <div style={{ fontWeight: 700, color: "#ffd9c6" }}>
+                                  {a.car ? `${a.car.brand} ${a.car.model}` : "Autó"}
+                                  {isAdmin && a.car?.owner?.email ? <span style={styles.muted}> · {a.car.owner.email}</span> : null}
+                                </div>
+                                <div style={{ opacity: 0.9, fontSize: 12, color: "#fff" }}>
+                                  {a.description || "—"} · {a.status || "PENDING"}
+                                  {a.center ? ` · ${a.center.name}` : ""}
+                                </div>
+                                {canDelete && (
+                                  <button onClick={() => askCancelAppt(a.id)} style={styles.btnDanger}>
+                                    Törlés
+                                  </button>
+                                )}
                               </div>
-                              <div style={{ opacity: 0.85, fontSize: 12 }}>
-                                {a.description || "—"} · {a.status || "PENDING"}
-                                {a.center ? ` · ${a.center.name}` : ""}
-                              </div>
-                              <button onClick={() => cancelAppt(a.id)} style={pillBtn}>Törlés</button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -617,6 +554,21 @@ export default function Garage() {
           </div>
         </div>
       </div>
+
+      {/* Confirm modal (autó/ időpont törlése) */}
+      <ConfirmModal
+        open={confirm.open}
+        text="A művelet nem visszavonható."
+        onNo={() => setConfirm({ open: false })}
+        onYes={() => {
+          // ha "editCarId" alatt hívtuk, akkor autó; ha naptárból, akkor appointment
+          if (tab === "edit" && confirm.id === Number(editCarId)) {
+            doDeleteCar();
+          } else {
+            doCancelAppt();
+          }
+        }}
+      />
     </>
   );
 }
@@ -645,3 +597,32 @@ function dayLabel(d: Date) {
   const weekday = ["H", "K", "Sze", "Cs", "P", "Szo", "V"][(d.getDay() + 6) % 7];
   return `${weekday} ${d.getMonth() + 1}.${d.getDate()}.`;
 }
+
+/* ===== Styles ===== */
+const styles: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", width: "100%", margin: 0, padding: 0, overflowX: "hidden", position: "relative", zIndex: 1 },
+  title: { textAlign: "center", fontSize: "2.2rem", fontWeight: 900, margin: "20px 0 30px", color: "#fff", textShadow: "0 2px 14px rgba(0,0,0,.6)" },
+  adminBadge: { marginLeft: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", fontSize: 12, verticalAlign: "middle" },
+  card: { background: "rgba(10,10,12,.86)", border: `1px solid ${ORANGE_BORDER_SOFT}`, borderRadius: 12, padding: 12, overflow: "hidden", color: "#fff", boxShadow: "0 0 24px rgba(255,100,0,.25)" },
+  inp: { width: "100%", boxSizing: "border-box", display: "block", padding: "10px 12px", borderRadius: 8, border: `1px solid ${ORANGE_BORDER_SOFT}`, background: "rgba(255,255,255,.06)", color: "#fff", outline: "none" },
+  selectInp: { width: "100%", boxSizing: "border-box", display: "block", padding: "10px 12px", borderRadius: 8, border: `1px solid ${ORANGE_BORDER_SOFT}`, background: "rgba(20,20,24,.9)", color: "#fff", outline: "none" },
+  hr: { margin: "14px 0", borderColor: ORANGE_BORDER_SOFT },
+  apptPill: { background: "rgba(255,130,40,.12)", border: `1px solid ${ORANGE_BORDER}`, borderRadius: 8, padding: 8, display: "grid", gap: 4, boxShadow: "0 0 24px rgba(255,100,0,.25)" },
+
+  // toast
+  toastWrap: { position: "fixed", right: 16, bottom: 16, zIndex: 80, display: "grid", gap: 8 },
+  toast: { padding: "8px 12px", borderRadius: 10, background: "rgba(20,24,40,.9)", border: "1px solid rgba(255,255,255,.18)", color: "#dfe8ff", boxShadow: "0 12px 28px rgba(0,0,0,.35)", fontWeight: 700, fontSize: 13.5 },
+  toastWarn: { background: "rgba(255,170,60,.12)", border: "1px solid rgba(255,170,60,.45)", color: "#ffe6c7" },
+  toastError: { background: "rgba(255,95,95,.12)", border: "1px solid rgba(255,95,95,.45)", color: "#ffd7d7" },
+
+  // confirm modal
+  modalBack: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", backdropFilter: "blur(2px)", zIndex: 120, display: "grid", placeItems: "center" },
+  modalCard: { background: "rgba(18,18,24,.96)", color: "#fff", borderRadius: 14, border: "1px solid rgba(255,255,255,.16)", padding: "16px 18px", width: 360, maxWidth: "92vw", boxShadow: "0 18px 44px rgba(0,0,0,.5)" },
+  btnDanger: { background: "transparent", border: "1px solid #ff6b6b", color: "#ffb0b0", padding: "8px 12px", borderRadius: 10, cursor: "pointer", width: "fit-content" },
+  btnGhost: { background: "transparent", border: "1px solid rgba(255,255,255,.25)", color: "#fff", padding: "8px 12px", borderRadius: 10, cursor: "pointer" },
+
+  notLoggedWrap: { minHeight: "100vh", display: "grid", placeItems: "center", position: "relative", zIndex: 1, padding: 24, color: "#fff" },
+  notLoggedCard: { background: "rgba(15,15,18,.88)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 14, padding: "18px 20px", boxShadow: "0 18px 40px rgba(0,0,0,.45)", maxWidth: 460, textAlign: "center" },
+  linkStrong: { color: "#a78bfa", textDecoration: "none", fontWeight: 800 },
+  muted: { color: "#9fb1d1", fontSize: 12.5 },
+};

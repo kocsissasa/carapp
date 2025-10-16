@@ -6,7 +6,7 @@ type PlaceLite = {
   lat: number;
   lng: number;
   distanceKm?: number;
-  brand?: string; // névből kinyert márka
+  brand?: string;
 };
 
 const BRANDS = ["MOL", "Shell", "OMV", "Oplus"];
@@ -21,7 +21,7 @@ const FUEL_PRICES = {
   Dízel: getPrice("DIESEL", 597),
   "Keverék": getPrice("KEVEREK", 645),
   LPG: getPrice("LPG", 334),
-  CNG: getPrice("CNG", 810), // Ft/kg
+  CNG: getPrice("CNG", 810),
 };
 
 export default function MapPage() {
@@ -33,7 +33,7 @@ export default function MapPage() {
   const youMarker = useRef<google.maps.Marker | null>(null);
   const dstMarker = useRef<google.maps.Marker | null>(null);
   const dirRenderer = useRef<google.maps.DirectionsRenderer | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]); // benzinkút ikonok
+  const markersRef = useRef<google.maps.Marker[]>([]);
 
   // UI állapot
   const [you, setYou] = useState<{ lat: number; lng: number } | null>(null);
@@ -42,7 +42,7 @@ export default function MapPage() {
   const [routeKm, setRouteKm] = useState<number | null>(null);
   const [routeMin, setRouteMin] = useState<number | null>(null);
 
-  // SZŰRŐ: üres halmaz = mindent mutat
+  // SZŰRŐ
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
 
   // ---- init + auto locate ----
@@ -344,7 +344,6 @@ function detectBrand(name: string): string | undefined {
   return undefined;
 }
 
-// ✅ javított haversine: most már számmal számol, nem függvénnyel
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -374,11 +373,14 @@ function InfoCard({ title, value, small = "" }: { title: string; value: string; 
 
 /* ---------- stílusok + háttér ---------- */
 
+const SAFE = "var(--dockSafeLeft, 92px)";
+
 const page: React.CSSProperties = {
   position: "relative",
   minHeight: "100vh",
   color: "#fff",
   overflow: "hidden",
+  paddingLeft: SAFE,                              // ← védőtáv a SideDocknak
 };
 
 const bgLayer: React.CSSProperties = {
@@ -394,7 +396,7 @@ const bgLayer: React.CSSProperties = {
 const outer: React.CSSProperties = {
   position: "relative",
   zIndex: 1,
-  width: "min(1550px, 96vw)",
+  width: `min(1550px, calc(96vw - ${SAFE}))`,     // ← hasznos szélesség = teljes - dock
   margin: "0 auto",
   padding: "24px 14px 80px",
 };
