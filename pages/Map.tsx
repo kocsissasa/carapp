@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMapsApi } from "../context/MapsLoader";
+import { useMapsApi } from "../context/MapsLoader"; // betöltött Google Maps JS API
 
+/* ---------- Típus a listában tárolt kút objektum ---------- */
 type PlaceLite = {
-  name: string;
-  lat: number;
-  lng: number;
-  distanceKm?: number;
-  brand?: string;
+  name: string;  // kút neve
+  lat: number; // szélesség
+  lng: number; // hosszúság
+  distanceKm?: number;  // távolság a userhez km-ben
+  brand?: string; // márka
 };
 
-const BRANDS = ["MOL", "Shell", "OMV", "Oplus"];
 
+const BRANDS = ["MOL", "Shell", "OMV", "Oplus"]; // -> Ismert márkák
+
+// Üzemnanyag árak a .env-ből
 const getPrice = (k: string, def: number) => {
-  const v = (import.meta as any).env[`VITE_PRICE_${k}`];
-  const n = v ? parseFloat(v) : NaN;
-  return Number.isFinite(n) ? n : def;
+  const v = (import.meta as any).env[`VITE_PRICE_${k}`]; // pl. VITE_PRICE_95
+  const n = v ? parseFloat(v) : NaN; // string → number
+  return Number.isFinite(n) ? n : def; // ha nem szám, fallback
 };
 const FUEL_PRICES = {
   "95-ös": getPrice("95", 593),
@@ -25,49 +28,54 @@ const FUEL_PRICES = {
 };
 
 export default function MapPage() {
-  const api = useMapsApi();
+  const api = useMapsApi(); // -> Google Maps API
 
   // Native Maps referenciák
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapObj = useRef<google.maps.Map | null>(null);
-  const youMarker = useRef<google.maps.Marker | null>(null);
-  const dstMarker = useRef<google.maps.Marker | null>(null);
-  const dirRenderer = useRef<google.maps.DirectionsRenderer | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const mapRef = useRef<HTMLDivElement | null>(null);  // DOM elem, amibe a térkép megy
+  const mapObj = useRef<google.maps.Map | null>(null); // google.maps.Map példány
+  const youMarker = useRef<google.maps.Marker | null>(null); // saját hely jelző
+  const dstMarker = useRef<google.maps.Marker | null>(null); // cél jelző
+  const dirRenderer = useRef<google.maps.DirectionsRenderer | null>(null); // útvonal renderelés
+  const markersRef = useRef<google.maps.Marker[]>([]); // összes kút marker listája
 
   // UI állapot
-  const [you, setYou] = useState<{ lat: number; lng: number } | null>(null);
-  const [dst, setDst] = useState<{ lat: number; lng: number } | null>(null);
-  const [places, setPlaces] = useState<PlaceLite[]>([]);
-  const [routeKm, setRouteKm] = useState<number | null>(null);
-  const [routeMin, setRouteMin] = useState<number | null>(null);
+  const [you, setYou] = useState<{ lat: number; lng: number } | null>(null); // saját hely
+  const [dst, setDst] = useState<{ lat: number; lng: number } | null>(null); // célpont
+  const [places, setPlaces] = useState<PlaceLite[]>([]); // összes talált kút
+  const [routeKm, setRouteKm] = useState<number | null>(null); // útvonal hossza km
+  const [routeMin, setRouteMin] = useState<number | null>(null); // útvonal idő percben megadva
 
   // SZŰRŐ
-  const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
+  const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set()); // ha üres = nincs szűrés
 
   // ---- init + auto locate ----
   useEffect(() => {
+    // ha még nincs API, nincs DOM, vagy már létrejött a map akkor exit
     if (!api || !mapRef.current || mapObj.current) return;
 
+    // 1) Térkép létrehozása
     const map = new api.maps.Map(mapRef.current, {
-      center: { lat: 47.4979, lng: 19.0402 },
+      center: { lat: 47.4979, lng: 19.0402 }, // kezdő Budapest középpont
       zoom: 12,
       streetViewControl: false,
       mapTypeControl: false,
       fullscreenControl: true,
-      styles: BLUE_MAP_STYLE,
+      styles: BLUE_MAP_STYLE, // egyedi színséma
     });
     mapObj.current = map;
 
+    // 2) Útvonal renderelő létrehozása, összekötve a térképpel
     dirRenderer.current = new api.maps.DirectionsRenderer({
-      suppressMarkers: true,
+      suppressMarkers: true, // a saját markereinket használjuk
       preserveViewport: false,
-      polylineOptions: { strokeColor: "#6c5ce7", strokeWeight: 6, strokeOpacity: 0.95 },
+      polylineOptions: { strokeColor: "#6c5ce7", strokeWeight: 6, strokeOpacity: 0.95 }, // neon vonal
     });
     dirRenderer.current.setMap(map);
 
+    // 3) Próbálja meghatározni az aktuális pozíciót, és keressen kutakat
     autoLocate();
 
+     // 4) Takarítás unmountkor: markerek és renderelő leszedése a térképről
     return () => {
       markersRef.current.forEach(m => m.setMap(null as any));
       markersRef.current = [];
@@ -77,20 +85,21 @@ export default function MapPage() {
       youMarker.current = null;
       dstMarker.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
+  }, [api]); // csak akkor fut, ha az API megjö
 
-  // ---- saját hely ----
+  // ---- saját hely meghatározásq ----
   const autoLocate = () => {
     if (!api || !mapObj.current || !navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        // siker esetében elmentjük az állapotot és térkép frissités
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setYou(p);
         mapObj.current!.setCenter(p);
         mapObj.current!.setZoom(13);
 
+        // saját jelölő létrehozása és frissitése
         if (!youMarker.current) {
           youMarker.current = new api.maps.Marker({
             position: p,
@@ -108,36 +117,40 @@ export default function MapPage() {
           youMarker.current.setPosition(p);
         }
 
+        // a friss középpont körül keressünk kutakat
         searchGasStations(p);
       },
       () => {
+        // hiba/tiltás esetén: a jelenlegi map center körül keresünk
         const c = mapObj.current!.getCenter()!;
         searchGasStations({ lat: c.lat(), lng: c.lng() });
       },
-      { enableHighAccuracy: true, timeout: 4000 }
+      { enableHighAccuracy: true, timeout: 4000 } // gyors, pontos próbálkozás
     );
   };
 
-  // ---- benzinkutak keresése ----
+  // ---- benzinkutak keresése a places api-val ----
   const searchGasStations = (center: { lat: number; lng: number }) => {
     if (!api || !mapObj.current) return;
     const service = new api.maps.places.PlacesService(mapObj.current);
 
     service.nearbySearch(
-      { location: center, radius: 7000, type: "gas_station" },
+      { location: center, radius: 7000, type: "gas_station" }, // 7km sugarú kör
       (res, status) => {
         if (status !== api.maps.places.PlacesServiceStatus.OK || !res) return;
 
+        // saját PlaceLite strúktura 
         const list: PlaceLite[] = res.map((p) => {
           const name = p.name || "Benzinkút";
           return {
             name,
             lat: p.geometry?.location?.lat() ?? center.lat,
             lng: p.geometry?.location?.lng() ?? center.lng,
-            brand: detectBrand(name),
+            brand: detectBrand(name), // heurisztika: névből márka
           };
         });
 
+         // ha tudjuk a user helyét, kiszámoljuk a távolságot és aszerint rendezünk
         const withDist = (you
           ? list.map((pl) => ({ ...pl, distanceKm: haversine(you.lat, you.lng, pl.lat, pl.lng) }))
           : list
@@ -150,7 +163,7 @@ export default function MapPage() {
 
   // látható (szűrt) lista
   const visiblePlaces = useMemo(() => {
-    if (selectedBrands.size === 0) return places;
+    if (selectedBrands.size === 0) return places; // nincs szűrés
     return places.filter((p) => p.brand && selectedBrands.has(p.brand));
   }, [places, selectedBrands]);
 
@@ -167,26 +180,27 @@ export default function MapPage() {
       const m = new api.maps.Marker({
         position: { lat: pl.lat, lng: pl.lng },
         map: mapObj.current!,
-        icon: { url: "https://maps.gstatic.com/mapfiles/ms2/micons/gas.png" },
+        icon: { url: "https://maps.gstatic.com/mapfiles/ms2/micons/gas.png" }, // kis kút ikon
         title: pl.name,
       });
-      m.addListener("click", () => setNewDestination(pl));
+      m.addListener("click", () => setNewDestination(pl)); // marker katt -> cél beállítása
       markersRef.current.push(m);
     });
 
-    // ha a jelenlegi célpont kiesett a szűrés miatt: váltsunk az elsőre
+    // ha a jelenlegi célpont kiesett a szűrés miatt -> váltsunk az elsőre
     if (visiblePlaces.length > 0 && (!dst || !visiblePlaces.some(v => almostEq(v, dst)))) {
       setNewDestination(visiblePlaces[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiblePlaces]);
 
-  // ---- célpont + útvonal ----
+  // ---- új célpont + útvonal ----
   const setNewDestination = (pl: PlaceLite) => {
     if (!api || !mapObj.current) return;
     const p = { lat: pl.lat, lng: pl.lng };
     setDst(p);
 
+    // cél marker létrehozása/frissítése (zászló ikon)
     if (!dstMarker.current) {
       dstMarker.current = new api.maps.Marker({
         position: p,
@@ -198,39 +212,43 @@ export default function MapPage() {
       dstMarker.current.setPosition(p);
       dstMarker.current.setTitle(pl.name);
     }
-
+  // térkép középre a célra, és ha van saját hely, útvonalterveezés
     mapObj.current!.panTo(p);
     if (you) buildRoute(you, p);
   };
 
+  // Útvonal építése DirectionsService segítségével
   const buildRoute = async (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
     if (!api || !mapObj.current) return;
     const service = new api.maps.DirectionsService();
     const res = await service.route({
       origin: from,
       destination: to,
-      travelMode: api.maps.TravelMode.DRIVING,
-      provideRouteAlternatives: false,
+      travelMode: api.maps.TravelMode.DRIVING, // autós útvonal
+      provideRouteAlternatives: false, // elég az első
     });
 
-    dirRenderer.current?.setDirections(res);
+    dirRenderer.current?.setDirections(res); // kirajzolás
 
+    // összesített távolság/idő
     let meters = 0;
     let secs = 0;
     res.routes[0].legs.forEach((leg) => {
       meters += leg.distance?.value || 0;
       secs += leg.duration?.value || 0;
     });
-    setRouteKm(Math.round((meters / 1000) * 10) / 10);
-    setRouteMin(Math.round(secs / 60));
+    setRouteKm(Math.round((meters / 1000) * 10) / 10); // 1 tizedesre kerekítve
+    setRouteMin(Math.round(secs / 60)); // percekre kerekítve
   };
 
+  // Útvonal törlése / render ürítése
   const clearRoute = () => {
     dirRenderer.current?.setDirections({ routes: [] } as unknown as google.maps.DirectionsResult);
     setRouteKm(null);
     setRouteMin(null);
   };
 
+  // Hány kút van 5km-es körzetben
   const nearbyCount = useMemo(() => {
     if (!you || visiblePlaces.length === 0) return 0;
     return visiblePlaces.filter((p) => haversine(you.lat, you.lng, p.lat, p.lng) <= 5).length;
@@ -239,7 +257,7 @@ export default function MapPage() {
   // --- UI ---
   return (
     <div style={page}>
-      <div style={bgLayer} />
+      <div style={bgLayer} /> {/* fix háttér (kép + sötét overlay) */}
 
       <div style={outer}>
         <div style={headerRow}>
@@ -248,11 +266,12 @@ export default function MapPage() {
         </div>
 
         <div style={layout}>
+          {/* BAL PANEL: gombok, szűrők, lista, infók */}
           <div style={panel}>
             {/* gombok */}
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <button style={btnPrimary} onClick={autoLocate}>Saját helyzet</button>
-              <button style={btnGhost} onClick={clearRoute}>Útvonal törlése</button>
+              <button style={btnPrimary} onClick={autoLocate}>Saját helyzet</button> {/* geolokáció újrapróbálása */}
+              <button style={btnGhost} onClick={clearRoute}>Útvonal törlése</button> {/* route reset */}
             </div>
 
             {/* szűrő chipek */}
@@ -263,8 +282,8 @@ export default function MapPage() {
                   <button
                     key={b}
                     onClick={() => {
-                      const next = new Set(selectedBrands);
-                      act ? next.delete(b) : next.add(b);
+                      const next = new Set(selectedBrands); // Set-et mindig új példánnyal állíjja
+                      act ? next.delete(b) : next.add(b); // toggle
                       setSelectedBrands(next);
                     }}
                     style={{ ...chip, ...(act ? chipActive : {}) }}
@@ -273,6 +292,7 @@ export default function MapPage() {
                   </button>
                 );
               })}
+              {/* Szűrés feloldása */}
               <button
                 onClick={() => setSelectedBrands(new Set())}
                 style={{ ...chip, marginLeft: "auto" }}
@@ -282,7 +302,7 @@ export default function MapPage() {
               </button>
             </div>
 
-            {/* lista */}
+            {/* kút lista (12 elemig, rendezve távolság szerint) */}
             <div style={subtleBox}>
               <div style={{ fontWeight: 800, marginBottom: 6 }}>Közeli benzinkutak</div>
               <div style={{ display: "grid", gap: 8 }}>
@@ -290,7 +310,7 @@ export default function MapPage() {
                   <button
                     key={`${p.name}-${i}`}
                     style={placeItem}
-                    onClick={() => setNewDestination(p)}
+                    onClick={() => setNewDestination(p)} // katt = célváltás + útvonal
                     title="Útvonal ehhez a kúthoz"
                   >
                     <span style={{ fontWeight: 700 }}>{p.name}</span>
@@ -318,11 +338,11 @@ export default function MapPage() {
 
           {/* térkép */}
           <div style={mapCard}>
-            <div ref={mapRef} style={mapBox} />
+            <div ref={mapRef} style={mapBox} /> {/* ide mountol a Google Map */}
           </div>
         </div>
 
-        {/* árak */}
+        {/* Üzemanyag árak kártyái (env-ből vagy default) */}
         <div style={pricesGrid}>
           {Object.entries(FUEL_PRICES).map(([k, v]) => (
             <div key={k} style={priceCard}>
@@ -338,14 +358,16 @@ export default function MapPage() {
 
 /* ---------- segédek ---------- */
 
+/** Név alapján próbál márkát felismerni (MOL/Shell/OMV/Oplus) */
 function detectBrand(name: string): string | undefined {
   const upper = name.toUpperCase();
   for (const b of BRANDS) if (upper.includes(b.toUpperCase())) return b;
   return undefined;
 }
 
+/** Haversine-távolság km-ben (nagy kör távolság) */
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
+  const R = 6371; // Föld sugara km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -361,6 +383,7 @@ function almostEq(p: { lat: number; lng: number }, q: { lat: number; lng: number
   return Math.abs(p.lat - q.lat) < 1e-6 && Math.abs(p.lng - q.lng) < 1e-6;
 }
 
+/** Kis információs kártya komponens */
 function InfoCard({ title, value, small = "" }: { title: string; value: string; small?: string }) {
   return (
     <div style={infoCard}>
@@ -373,14 +396,14 @@ function InfoCard({ title, value, small = "" }: { title: string; value: string; 
 
 /* ---------- stílusok + háttér ---------- */
 
-const SAFE = "var(--dockSafeLeft, 92px)";
+const SAFE = "var(--dockSafeLeft, 92px)"; // SideDock által „lefoglalt” bal padding változó
 
 const page: React.CSSProperties = {
   position: "relative",
   minHeight: "100vh",
   color: "#fff",
   overflow: "hidden",
-  paddingLeft: SAFE,                              // ← védőtáv a SideDocknak
+  paddingLeft: SAFE,                              // -> védőtáv a SideDocknak / ne takarja ki a tartalmat a sáv
 };
 
 const bgLayer: React.CSSProperties = {
@@ -388,15 +411,15 @@ const bgLayer: React.CSSProperties = {
   inset: 0,
   zIndex: 0,
   background: `
-    linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)),
-    url('/neo-speed-bg.jpg') center/cover no-repeat
+    linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), /* olvashatóság */
+    url('/neo-speed-bg.jpg') center/cover no-repeat /* háttérkép */
   `,
 };
 
 const outer: React.CSSProperties = {
   position: "relative",
   zIndex: 1,
-  width: `min(1550px, calc(96vw - ${SAFE}))`,     // ← hasznos szélesség = teljes - dock
+  width: `min(1550px, calc(96vw - ${SAFE}))`,     // max szélesség + dock kompenzáció
   margin: "0 auto",
   padding: "24px 14px 80px",
 };
@@ -439,6 +462,7 @@ const infoCard: React.CSSProperties = { background: "rgba(255,255,255,.06)", bor
 const pricesGrid: React.CSSProperties = { marginTop: 18, display: "grid", gap: 12, gridTemplateColumns: "repeat(5, minmax(180px, 1fr))" };
 const priceCard: React.CSSProperties = { background: "rgba(17,17,20,.82)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: 12, backdropFilter: "blur(6px)", textAlign: "center" };
 
+/* ---------- Egyedi map stílus (világos-kék) ---------- */
 const BLUE_MAP_STYLE: google.maps.MapTypeStyle[] = [
   { elementType: "geometry", stylers: [{ color: "#eaf2ff" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#3b4a66" }] },

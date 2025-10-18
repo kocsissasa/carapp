@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
-import { getToken, parseJwt } from "../utils/auth";
+import { getToken, parseJwt } from "../utils/auth"; // Token kiolvasása és JWT parse
 
-/* ===== Types ===== */
+/* --- Types -> segítenek, hogy mi van state-ben és API válaszban--- */
 type Car = {
   id: number;
   brand: string;
   model: string;
   year: number;
-  owner?: { email?: string; id?: number };
+  owner?: { email?: string; id?: number }; // admin nézetben hasznos
 };
 
 type ServiceCenter = {
@@ -32,32 +32,35 @@ type Appointment = {
 
 type Tab = "create" | "edit";
 
-/* ===== Const ===== */
-const H_START = 8;
-const H_END = 18;
+/* --- Const --- */
+const H_START = 8; // heti rács kezdő órája
+const H_END = 18; // heti rács záró órája
 
-/* ===== Background (public/garagefinal.jpg) ===== */
+/* --- Background (public/garagefinal.jpg) --- */
 const bgUrl = `${import.meta.env.BASE_URL}garagefinal.jpg`;
 
-/* ===== Colors ===== */
+/* --- Colors --- */
+// narancs neon stílushoz állandók
 const ORANGE1 = "#ff7a00";
 const ORANGE2 = "#ff4d00";
 const ORANGE_BORDER = "rgba(255, 122, 0, .45)";
 const ORANGE_BORDER_SOFT = "rgba(255, 122, 0, .25)";
 
-/* ===== Toast mini system ===== */
+/* --- Toast mini system --- */
+// Egyszerű, időzített snackbar értesítések
 type Toast = { id: number; text: string; tone?: "info" | "warn" | "error" };
 function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const notify = (text: string, tone: Toast["tone"] = "info") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+    const id = Date.now() + Math.random();  // egyedi azonosító
+    setToasts((t) => [...t, { id, text, tone }]); // kiírjuk
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600); // 2.6 sec után eltűnik
   };
   return { toasts, notify };
 }
 
-/* ===== Pretty confirm ===== */
+/* --- Pretty confirm --- */
+// Egyszerű megerősítő modal, ha törölni akarunk valamit
 function ConfirmModal({
   open,
   text,
@@ -69,10 +72,10 @@ function ConfirmModal({
   onYes: () => void;
   onNo: () => void;
 }) {
-  if (!open) return null;
+  if (!open) return null; // feltételes render: ha nem nyitott, semmit se rajzol
   return (
-    <div style={styles.modalBack}>
-      <div style={styles.modalCard}>
+    <div style={styles.modalBack}>  {/* sötétített háttér + blur */}
+      <div style={styles.modalCard}> {/* kártya maga */}
         <div style={{ fontWeight: 900, marginBottom: 6 }}>Biztos vagy benne?</div>
         <div style={{ opacity: 0.92, marginBottom: 12 }}>{text}</div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -88,12 +91,12 @@ function ConfirmModal({
   );
 }
 
-/* =================================================================== */
 
 export default function Garage() {
-  const token = getToken();
-  const jwt = parseJwt();
+  const token = getToken(); // JWT Bearer a localStorage-ből
+  const jwt = parseJwt(); // JWT payload pars
 
+  // Saját email – több mezőből is próbáljuk kinyerni, hogy kompatibilis legyen
   const myEmail =
     (jwt as any)?.email ||
     (jwt as any)?.sub ||
@@ -110,11 +113,11 @@ export default function Garage() {
     String(r).toUpperCase().includes("ADMIN")
   );
 
-  const { toasts, notify } = useToasts();
+  const { toasts, notify } = useToasts(); // toast rendszer
 
   // UI
-  const [tab, setTab] = useState<Tab>("create");
-  const [confirm, setConfirm] = useState<{ open: boolean; id?: number }>({
+  const [tab, setTab] = useState<Tab>("create"); // bal oldali tab: új autó / autó módosítás
+  const [confirm, setConfirm] = useState<{ open: boolean; id?: number }>({ // confirm modal állapot
     open: false,
   });
 
@@ -133,7 +136,7 @@ export default function Garage() {
   // Időpontok
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [pickedCarId, setPickedCarId] = useState<number | "">("");
-  const [dt, setDt] = useState<string>("");
+  const [dt, setDt] = useState<string>(""); // datetime-local input értéke (helyi idő, percre)
   const [desc, setDesc] = useState("");
 
   // Szervizek
@@ -141,9 +144,10 @@ export default function Garage() {
   const [pickedCenterId, setPickedCenterId] = useState<number | "">("");
 
   // Heti naptár
-  const [weekAnchor, setWeekAnchor] = useState(firstDayOfWeek(new Date()));
+  const [weekAnchor, setWeekAnchor] = useState(firstDayOfWeek(new Date())); // aktuális hét hétfője
 
-  /* ===== Global CSS (animációk + utility classok) ===== */
+  /* --- Global CSS (animációk + utility classok) --- */
+   // Belső <style> blokk: neon gomb animáció, fókusz gyűrű, háttér fade
   const GlobalCSS = (
     <style>{`
       :root { --o1:${ORANGE1}; --o2:${ORANGE2}; }
@@ -152,7 +156,7 @@ export default function Garage() {
       .garage-bg{
         position:fixed; inset:0; z-index:0;
         background: linear-gradient(rgba(0,0,0,.52), rgba(0,0,0,.58)), url('${bgUrl}') center / cover no-repeat;
-        animation: bgFade .9s ease both;
+        animation: bgFade .9s ease both; /* belassuló belépő animáció */
       }
 
       @keyframes gradientShift{0%{background-position:0% 50%}100%{background-position:200% 50%}}
@@ -160,7 +164,7 @@ export default function Garage() {
 
       .btn-anim{
         background: linear-gradient(90deg,var(--o1),var(--o2),var(--o1));
-        background-size:200% 200%;
+        background-size:200% 200%; /* animált gradiens */
         animation: gradientShift 8s ease infinite, glowPulse 3.5s ease-in-out infinite;
         border:1px solid ${ORANGE_BORDER};
         color:#1b0f08; font-weight:800; padding:10px 14px; border-radius:10px; cursor:pointer;
@@ -175,21 +179,23 @@ export default function Garage() {
     `}</style>
   );
 
-  /* ===== Lifecycle ===== */
+  /* --- Lifecycle --- */
   useEffect(() => {
-    if (!token) return;
+    if (!token) return; // ha nincs bejelentkezve, ne hívjunk API-t
     (async () => {
-      await Promise.all([loadCars(), loadAppointments(), loadCenters()]);
+      await Promise.all([loadCars(), loadAppointments(), loadCenters()]); // párhuzamos betöltés
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, isAdmin]);
+  }, [token, isAdmin]);  // admin mód váltásakor is újra töltsön
 
+   // Autók betöltése (admin: minden, user: csak saját)
   const loadCars = async () => {
     const res = await api.get<Car[]>("/api/cars");
     const all = res.data || [];
     setCars(isAdmin ? all : all.filter((c) => c.owner?.email === myEmail));
   };
 
+  // Időpontok betöltése (admin: /api/appointments, user: /api/appointments/me)
   const loadAppointments = async () => {
     const url = isAdmin ? "/api/appointments" : "/api/appointments/me";
     const res = await api.get<Appointment[]>(url);
@@ -199,6 +205,7 @@ export default function Garage() {
     setAppts(list);
   };
 
+// Szerviz központok betöltése
   const loadCenters = async () => {
     try {
       const res = await api.get<ServiceCenter[]>("/api/centers");
@@ -208,23 +215,26 @@ export default function Garage() {
     }
   };
 
-  /* ===== Autó létrehozás/módosítás/törlés ===== */
+  /* --- Autó létrehozás/módosítás/törlés --- */
   const addCar = async () => {
+    // kliens oldali megerősítés
     if (!carBrand.trim() || !carModel.trim() || !carYear) {
       notify("Gyártó, modell és évjárat kötelező.", "warn");
       return;
     }
     const payload = { brand: carBrand.trim(), model: carModel.trim(), year: Number(carYear) };
     try {
-      await api.post("/api/cars", payload);
-      setCarBrand(""); setCarModel(""); setCarYear("");
-      await loadCars();
+      await api.post("/api/cars", payload); // POST /api/cars
+      setCarBrand(""); setCarModel(""); setCarYear(""); // űrlap ürítés
+      await loadCars(); // lista frissítés
       notify("Autó hozzáadva!");
     } catch (e: any) {
+       // backend-től jövő hiba barátibbá tétele
       notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült hozzáadni az autót.", "error");
     }
   };
 
+  // Ha kiválasztunk egy autót módosításra, előtöltjük a mezőket
   useEffect(() => {
     if (!editCarId) { setEditBrand(""); setEditModel(""); setEditYear(""); return; }
     const c = cars.find((x) => x.id === editCarId);
@@ -238,8 +248,8 @@ export default function Garage() {
     }
     const payload = { brand: editBrand.trim(), model: editModel.trim(), year: Number(editYear) };
     try {
-      await api.put(`/api/cars/${editCarId}`, payload);
-      await loadCars();
+      await api.put(`/api/cars/${editCarId}`, payload); // PUT /api/cars/{id}
+      await loadCars(); // frissítés
       notify("Autó módosítva!");
     } catch (e: any) {
       notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült módosítani.", "error");
@@ -248,22 +258,23 @@ export default function Garage() {
 
   const askDeleteCar = () => {
     if (!editCarId) return notify("Válassz autót!", "warn");
-    setConfirm({ open: true, id: Number(editCarId) });
+    setConfirm({ open: true, id: Number(editCarId) }); // megerősítés megnyitása
   };
   const doDeleteCar = async () => {
     const id = confirm.id!;
     setConfirm({ open: false });
     try {
-      await api.delete(`/api/cars/${id}`);
-      setEditCarId("");
-      await Promise.all([loadCars(), loadAppointments()]);
+      await api.delete(`/api/cars/${id}`); // DELETE /api/cars/{id}
+      setEditCarId(""); // kiválasztás törlése
+      await Promise.all([loadCars(), loadAppointments()]); // lista + naptár újratöltés
       notify("Autó törölve.");
     } catch (e: any) {
       notify(e?.response?.data?.error || e?.response?.data?.message || "Nem sikerült törölni.", "error");
     }
   };
 
-  /* ===== Időpont létrehozás / törlés ===== */
+  /* --- Időpont létrehozás / törlés --- */
+   // Egyes backendek 00 másodperc nélkül 400-at dobhatnak
   const withSeconds = (v: string) => (v && v.length === 16 ? `${v}:00` : v);
   const extractErr = (e: any) => {
     const s = e?.response?.status;
@@ -278,23 +289,25 @@ export default function Garage() {
     const cid = Number(pickedCarId);
     const centerId = Number(pickedCenterId);
     const pickedCenter = centers.find((c) => c.id === centerId);
+     // leírás végére odatesszük a szerviz nevét
     const description = pickedCenter
       ? `${desc || ""}${desc ? " · " : ""}Szerviz: ${pickedCenter.name}`
       : (desc || "");
 
     const payload = {
-      car: { id: cid },
-      serviceDateTime: dt,
+      car: { id: cid }, // backend a car.id alapján
+      serviceDateTime: dt, // datetime-local
       description,
-      center: { id: centerId },
+      center: { id: centerId }, // kötelező center
     };
 
     try {
-      await api.post("/api/appointments", payload);
-      setDesc(""); setDt(""); setPickedCenterId("");
+      await api.post("/api/appointments", payload);  // POST /api/appointments
+      setDesc(""); setDt(""); setPickedCenterId(""); // ürítés
       await loadAppointments();
       notify("Időpont felvéve!");
     } catch (e1: any) {
+       // ha 400 és a másodpercek hiányozhatnak, megpróbáljuk pótolni
       if (e1?.response?.status === 400) {
         try {
           await api.post("/api/appointments", { ...payload, serviceDateTime: withSeconds(dt) });
@@ -310,12 +323,13 @@ export default function Garage() {
     }
   };
 
-  const askCancelAppt = (id: number) => setConfirm({ open: true, id });
+  const askCancelAppt = (id: number) => setConfirm({ open: true, id }); // naptárgomb megnyitja a megerősítőt
   const doCancelAppt = async () => {
     const id = confirm.id!;
     setConfirm({ open: false });
     try {
-      await api.delete(`/api/appointments/${id}`);
+      await api.delete(`/api/appointments/${id}`);   // DELETE /api/appointments/{id} – státuszt CANCELLED-re teszi a backend
+      await loadAppointments();
       await loadAppointments();
       notify("Időpont törölve.");
     } catch (e: any) {
@@ -323,29 +337,33 @@ export default function Garage() {
     }
   };
 
-  /* ===== Heti rács ===== */
+  /* --- Heti rács --- */
+  // A hét napjai (hétfőtől vasárnapig) – a weekAnchor (hétfő) alapján
   const daysOfWeek = useMemo(() => {
     const d = new Date(weekAnchor);
     return Array.from({ length: 7 }).map((_, i) => addDays(d, i));
   }, [weekAnchor]);
 
+  // Órasávok (8..18)
   const hours = useMemo(
     () => Array.from({ length: H_END - H_START + 1 }).map((_, i) => H_START + i),
     []
   );
 
+ // Időpontok csoportosítása nap+óra kulcs szerint
   const apptsByDayHour = useMemo(() => {
     const map = new Map<string, Appointment[]>();
     appts.forEach((a) => {
       const dt = new Date(a.serviceDateTime);
-      const k = keyDayHour(dt);
+      const k = keyDayHour(dt);  // pl. 2025-10-17T09
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(a);
     });
     return map;
   }, [appts]);
 
-  /* ===== NOT LOGGED IN ===== */
+  /* --- NOT LOGGED IN --- */
+   // Ha nincs token, egy egyszerű „jelentkezz be” oldal jelenik meg
   if (!token) {
     return (
       <>
@@ -369,6 +387,7 @@ export default function Garage() {
     );
   }
 
+   // datetime-local min érték: most (helyi idő, percre kerekítve)
   const nowLocalMin = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16);
@@ -377,7 +396,7 @@ export default function Garage() {
     <>
       {GlobalCSS}
 
-      {/* toast-ok */}
+      {/* toast-ok a jobb alsó sarokban*/}
       <div style={styles.toastWrap} aria-live="polite">
         {toasts.map((t) => (
           <div
@@ -392,7 +411,7 @@ export default function Garage() {
         ))}
       </div>
 
-      {/* háttér */}
+      {/* neon háttér */}
       <div className="garage-bg" />
 
       <div style={styles.page}>
@@ -417,12 +436,13 @@ export default function Garage() {
               </ul>
 
               <hr style={styles.hr} />
-
+              {/* Tab gombok */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <button onClick={() => setTab("create")} className="btn-anim small">Új autó</button>
                 <button onClick={() => setTab("edit")} className="btn-anim small" style={{ filter: tab === "edit" ? "brightness(1.08)" : undefined }}>Autó módosítása</button>
               </div>
 
+              {/* Új autó űrlap */}
               {tab === "create" && (
                 <div style={{ display: "grid", gap: 8 }}>
                   <input placeholder="Gyártó (pl. Opel)" value={carBrand} onChange={(e) => setCarBrand(e.target.value)} style={styles.inp} className="gar-inp" />
@@ -432,6 +452,8 @@ export default function Garage() {
                 </div>
               )}
 
+
+              {/* Autó szerkesztő */}
               {tab === "edit" && (
                 <div style={{ display: "grid", gap: 8 }}>
                   <select value={editCarId} onChange={(e) => setEditCarId(e.target.value ? Number(e.target.value) : "")} style={styles.selectInp} className="gar-inp">
@@ -454,6 +476,7 @@ export default function Garage() {
 
               <hr style={styles.hr} />
 
+              {/* Új szervizidőpont űrlap */}
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Új szervizidőpont</div>
               <div style={{ display: "grid", gap: 8 }}>
                 <select value={pickedCarId} onChange={(e) => setPickedCarId(e.target.value ? Number(e.target.value) : "")} style={styles.selectInp} className="gar-inp">
@@ -474,7 +497,7 @@ export default function Garage() {
                   ))}
                 </select>
 
-                <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} min={nowLocalMin} style={styles.inp} className="gar-inp" />
+                <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} min={nowLocalMin} style={styles.inp} className="gar-inp" /> // múltbeli foglalás tiltása
                 <input placeholder="Leírás (pl. Olajcsere)" value={desc} onChange={(e) => setDesc(e.target.value)} style={styles.inp} className="gar-inp" />
                 <button onClick={createAppt} className="btn-anim">Időpont felvétele</button>
               </div>
@@ -497,29 +520,34 @@ export default function Garage() {
                 </div>
               </div>
 
+              {/* Naptár fej sor: nap címkék */}
               <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", borderBottom: `1px solid ${ORANGE_BORDER_SOFT}` }}>
-                <div />
+                <div /> {/* üres sarok a bal felső cellának */}
                 {daysOfWeek.map((d, i) => (
                   <div key={i} style={{ padding: "6px 8px", borderLeft: `1px solid ${ORANGE_BORDER_SOFT}` }}>
-                    {dayLabel(d)}
+                    {dayLabel(d)} {/* pl. H 10.17. */}
                   </div>
                 ))}
               </div>
 
+             {/* Órasor + cellák */}
               <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)" }}>
                 {hours.map((h) => (
                   <div key={`h-${h}`} style={{ padding: "6px 8px", borderBottom: `1px solid ${ORANGE_BORDER_SOFT}`, opacity: 0.9 }}>
                     {`${h}:00`}
                   </div>
                 ))}
+
+                {/* Napok oszlopai */}
                 {daysOfWeek.map((d, di) => (
                   <div key={`col-${di}`} style={{ display: "contents" }}>
                     {hours.map((h) => {
                       const cellKey = keyDayHour(new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, 0, 0));
-                      const items = apptsByDayHour.get(cellKey) || [];
+                      const items = apptsByDayHour.get(cellKey) || []; // ide eső időpontok
                       return (
                         <div key={`${cellKey}`} style={{ borderLeft: `1px solid ${ORANGE_BORDER_SOFT}`, borderBottom: `1px solid ${ORANGE_BORDER_SOFT}`, minHeight: 44, padding: 6 }}>
                           {items.map((a) => {
+                            // Tulaj-jog: a car.owner.email alapján hasonlítjuk
                             const mineAppt =
                               a.car?.owner?.email
                                 ? a.car.owner.email === myEmail
@@ -573,19 +601,23 @@ export default function Garage() {
   );
 }
 
-/* ===== Helpers ===== */
+/* --- Helpers --- */
+// Hét első napja (hétfő) 
 function firstDayOfWeek(d: Date) {
   const copy = new Date(d);
-  const day = (copy.getDay() + 6) % 7; // hétfő=0
+  const day = (copy.getDay() + 6) % 7; // getDay(): vasárnap=0 → hétfő=0-ra tolunk
   copy.setDate(copy.getDate() - day);
   copy.setHours(0, 0, 0, 0);
   return copy;
 }
+
+// Dátum + napok
 function addDays(d: Date, days: number) {
   const c = new Date(d);
   c.setDate(c.getDate() + days);
   return c;
 }
+// Kulcs generálása nap+óra szerint (pl. 2025-10-17T09)
 function keyDayHour(d: Date) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -593,12 +625,13 @@ function keyDayHour(d: Date) {
   const h = `${d.getHours()}`.padStart(2, "0");
   return `${y}-${m}-${day}T${h}`;
 }
+// Rövid fejléc címke (H/K/Sze/… + MM.DD.)
 function dayLabel(d: Date) {
   const weekday = ["H", "K", "Sze", "Cs", "P", "Szo", "V"][(d.getDay() + 6) % 7];
   return `${weekday} ${d.getMonth() + 1}.${d.getDate()}.`;
 }
 
-/* ===== Styles ===== */
+/* --- Styles --- */
 const styles: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", width: "100%", margin: 0, padding: 0, overflowX: "hidden", position: "relative", zIndex: 1 },
   title: { textAlign: "center", fontSize: "2.2rem", fontWeight: 900, margin: "20px 0 30px", color: "#fff", textShadow: "0 2px 14px rgba(0,0,0,.6)" },
@@ -615,12 +648,13 @@ const styles: Record<string, React.CSSProperties> = {
   toastWarn: { background: "rgba(255,170,60,.12)", border: "1px solid rgba(255,170,60,.45)", color: "#ffe6c7" },
   toastError: { background: "rgba(255,95,95,.12)", border: "1px solid rgba(255,95,95,.45)", color: "#ffd7d7" },
 
-  // confirm modal
+  // confirm 
   modalBack: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", backdropFilter: "blur(2px)", zIndex: 120, display: "grid", placeItems: "center" },
   modalCard: { background: "rgba(18,18,24,.96)", color: "#fff", borderRadius: 14, border: "1px solid rgba(255,255,255,.16)", padding: "16px 18px", width: 360, maxWidth: "92vw", boxShadow: "0 18px 44px rgba(0,0,0,.5)" },
   btnDanger: { background: "transparent", border: "1px solid #ff6b6b", color: "#ffb0b0", padding: "8px 12px", borderRadius: 10, cursor: "pointer", width: "fit-content" },
   btnGhost: { background: "transparent", border: "1px solid rgba(255,255,255,.25)", color: "#fff", padding: "8px 12px", borderRadius: 10, cursor: "pointer" },
 
+  // nem bejelentkezett fül
   notLoggedWrap: { minHeight: "100vh", display: "grid", placeItems: "center", position: "relative", zIndex: 1, padding: 24, color: "#fff" },
   notLoggedCard: { background: "rgba(15,15,18,.88)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 14, padding: "18px 20px", boxShadow: "0 18px 40px rgba(0,0,0,.45)", maxWidth: 460, textAlign: "center" },
   linkStrong: { color: "#a78bfa", textDecoration: "none", fontWeight: 800 },
