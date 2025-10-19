@@ -91,7 +91,6 @@ function ConfirmModal({
   );
 }
 
-
 export default function Garage() {
   const token = getToken(); // JWT Bearer a localStorage-ből
   const jwt = parseJwt(); // JWT payload pars
@@ -205,7 +204,7 @@ export default function Garage() {
     setAppts(list);
   };
 
-// Szerviz központok betöltése
+  // Szerviz központok betöltése
   const loadCenters = async () => {
     try {
       const res = await api.get<ServiceCenter[]>("/api/centers");
@@ -273,7 +272,7 @@ export default function Garage() {
     }
   };
 
-  /* --- Időpont létrehozás / törlés --- */
+  /* --- Időpont létrehozás / törlés / admin CONFIRM --- */
    // Egyes backendek 00 másodperc nélkül 400-at dobhatnak
   const withSeconds = (v: string) => (v && v.length === 16 ? `${v}:00` : v);
   const extractErr = (e: any) => {
@@ -328,13 +327,41 @@ export default function Garage() {
     const id = confirm.id!;
     setConfirm({ open: false });
     try {
-      await api.delete(`/api/appointments/${id}`);   // DELETE /api/appointments/{id} – státuszt CANCELLED-re teszi a backend
-      await loadAppointments();
+      await api.delete(`/api/appointments/${id}`);   // DELETE /api/appointments/{id} – státuszt CANCELLED-re teheti a backend
       await loadAppointments();
       notify("Időpont törölve.");
     } catch (e: any) {
       notify(extractErr(e) || "Nem sikerült törölni.", "error");
     }
+  };
+
+  // --- ADMIN: Jóváhagyás (CONFIRMED) ---
+  const confirmAppt = async (id: number) => {
+    if (!isAdmin) return;
+    try {
+      // 1) POST /confirm
+      await api.post(`/api/appointments/${id}/confirm`);
+    } catch {
+      try {
+        // 2) PUT /confirm
+        await api.put(`/api/appointments/${id}/confirm`);
+      } catch {
+        try {
+          // 3) PATCH /{id} {status: CONFIRMED}
+          await api.patch(`/api/appointments/${id}`, { status: "CONFIRMED" });
+        } catch {
+          try {
+            // 4) PUT /{id}/status {status: CONFIRMED}
+            await api.put(`/api/appointments/${id}/status`, { status: "CONFIRMED" });
+          } catch (e4: any) {
+            notify(extractErr(e4), "error");
+            return;
+          }
+        }
+      }
+    }
+    await loadAppointments();
+    notify("Időpont jóváhagyva (CONFIRMED).");
   };
 
   /* --- Heti rács --- */
@@ -452,7 +479,6 @@ export default function Garage() {
                 </div>
               )}
 
-
               {/* Autó szerkesztő */}
               {tab === "edit" && (
                 <div style={{ display: "grid", gap: 8 }}>
@@ -469,7 +495,7 @@ export default function Garage() {
                   <input placeholder="Évjárat" type="number" value={editYear} onChange={(e) => setEditYear(e.target.value ? Number(e.target.value) : "")} style={styles.inp} className="gar-inp" />
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={updateCar} className="btn-anim" style={{ flex: 1 }}>Mentés</button>
-                    <button onClick={askDeleteCar} style={styles.btnDanger} style={{ ...styles.btnDanger, flex: 1 } as any}>Törlés</button>
+                    <button onClick={askDeleteCar} style={{ ...styles.btnDanger, flex: 1 } as any}>Törlés</button>
                   </div>
                 </div>
               )}
@@ -497,7 +523,7 @@ export default function Garage() {
                   ))}
                 </select>
 
-                <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} min={nowLocalMin} style={styles.inp} className="gar-inp" /> // múltbeli foglalás tiltása
+                <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} min={nowLocalMin} style={styles.inp} className="gar-inp" />
                 <input placeholder="Leírás (pl. Olajcsere)" value={desc} onChange={(e) => setDesc(e.target.value)} style={styles.inp} className="gar-inp" />
                 <button onClick={createAppt} className="btn-anim">Időpont felvétele</button>
               </div>
@@ -564,11 +590,20 @@ export default function Garage() {
                                   {a.description || "—"} · {a.status || "PENDING"}
                                   {a.center ? ` · ${a.center.name}` : ""}
                                 </div>
-                                {canDelete && (
-                                  <button onClick={() => askCancelAppt(a.id)} style={styles.btnDanger}>
-                                    Törlés
-                                  </button>
-                                )}
+
+                                {/* Műveletek: Adminnak JÓVÁHAGYÁS, mindenkinek (tulaj/admin) TÖRLÉS */}
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                  {isAdmin && a.status !== "CONFIRMED" && (
+                                    <button onClick={() => confirmAppt(a.id)} style={styles.btnSuccess}>
+                                      Jóváhagyás
+                                    </button>
+                                  )}
+                                  {canDelete && (
+                                    <button onClick={() => askCancelAppt(a.id)} style={styles.btnDanger}>
+                                      Törlés
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -652,6 +687,7 @@ const styles: Record<string, React.CSSProperties> = {
   modalBack: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", backdropFilter: "blur(2px)", zIndex: 120, display: "grid", placeItems: "center" },
   modalCard: { background: "rgba(18,18,24,.96)", color: "#fff", borderRadius: 14, border: "1px solid rgba(255,255,255,.16)", padding: "16px 18px", width: 360, maxWidth: "92vw", boxShadow: "0 18px 44px rgba(0,0,0,.5)" },
   btnDanger: { background: "transparent", border: "1px solid #ff6b6b", color: "#ffb0b0", padding: "8px 12px", borderRadius: 10, cursor: "pointer", width: "fit-content" },
+  btnSuccess: { background: "transparent", border: "1px solid #6bff8b", color: "#c7ffd7", padding: "8px 12px", borderRadius: 10, cursor: "pointer", width: "fit-content" },
   btnGhost: { background: "transparent", border: "1px solid rgba(255,255,255,.25)", color: "#fff", padding: "8px 12px", borderRadius: 10, cursor: "pointer" },
 
   // nem bejelentkezett fül
