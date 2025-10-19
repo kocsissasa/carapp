@@ -1,0 +1,61 @@
+@startuml
+title CarApp – Controller / Service / Repository áttekintés
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package controller {
+  class AdminController
+  class AuthController
+  class CarController
+  class ForumController
+  class NewsController
+  class PostReactionController
+  class ServiceAppointmentController
+  class ServiceCenterController
+  class UserController
+}
+
+package service {
+  ' ha külön service osztályok vannak, nevezd át ezekre
+  class AuthService
+  class CarService
+  class ForumService
+  class NewsService
+  class PostReactionService
+  class ServiceAppointmentService
+  class ServiceCenterService
+  class UserService
+}
+
+package repository {
+  class CarRepository
+  class CommentRepository
+  class PostReactionRepository
+  class PostRepository
+  class ServiceAppointmentRepository
+  class ServiceCenterRepository
+  class ServiceVoteRepository
+  class UserRepository
+}
+
+' tipikus hívási láncok
+AuthController --> AuthService
+CarController --> CarService
+ForumController --> ForumService
+NewsController --> NewsService
+PostReactionController --> PostReactionService
+ServiceAppointmentController --> ServiceAppointmentService
+ServiceCenterController --> ServiceCenterService
+UserController --> UserService
+
+CarService --> CarRepository
+ForumService --> PostRepository
+PostReactionService --> PostReactionRepository
+ServiceAppointmentService --> ServiceAppointmentRepository
+ServiceCenterService --> ServiceCenterRepository
+UserService --> UserRepository
+ForumService --> CommentRepository
+ServiceCenterService --> ServiceVoteRepository
+
+@enduml

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * Kötelező: car, user, center, serviceDateTime, description.
  */
 @Entity
-@Table(name = "service_appointments")
+@Table(name = "service_appointments") // -> Tábla neve
 public class ServiceAppointment {
 
     @Id

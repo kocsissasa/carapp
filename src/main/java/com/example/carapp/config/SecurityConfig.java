@@ -59,7 +59,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/forum/**").authenticated() // -> Írás csak bejelentkezett user számára
                         .requestMatchers(HttpMethod.PUT, "/api/forum/**").authenticated()  // -> Módosítás auth-hoz kötött
                         .requestMatchers(HttpMethod.DELETE, "/api/forum/**").authenticated() // -> Törlés auth-hoz kötött
-                        
 
                         // Reakciók – publikus lekérdezés, írás/törlés auth
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/forum/posts/*/reactions").permitAll() // -> Reakciók lekérdezése publikus

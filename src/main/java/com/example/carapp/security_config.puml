@@ -1,0 +1,29 @@
+@startuml
+title CarApp – Security és konfigurációs réteg
+
+skinparam packageStyle rectangle
+skinparam classFontSize 12
+skinparam linetype ortho
+skinparam backgroundColor #FFFFFF
+
+package security {
+  class JwtAuthFilter
+  class JwtService
+}
+
+package config {
+  class SecurityConfig
+  class DataSeeder
+}
+
+package controller {
+  class AuthController
+}
+
+' ===== KAPCSOLATOK =====
+SecurityConfig --> JwtAuthFilter : szűrőlánc (filter chain)
+JwtAuthFilter --> JwtService : token validálás
+AuthController --> JwtService : token generálás / ellenőrzés
+DataSeeder --> SecurityConfig : indításkori konfiguráció
+
+@enduml

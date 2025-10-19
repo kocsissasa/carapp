@@ -1,0 +1,84 @@
+@startuml
+title CarApp – Entitáskapcsolati diagram (JPA)
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ===== ENTITÁSOK =====
+class User {
+  +id: Long
+  +email: String
+  +password: String
+  +role: Role
+}
+
+class Car {
+  +id: Long
+  +brand: String
+  +model: String
+  +year: int
+  +ownerId: Long
+}
+
+class ServiceCenter {
+  +id: Long
+  +name: String
+  +address: String
+}
+
+class ServiceAppointment {
+  +id: Long
+  +dateTime: LocalDateTime
+  +status: AppointmentStatus
+}
+
+class ServiceVote {
+  +id: Long
+  +score: int
+}
+
+class Post {
+  +id: Long
+  +title: String
+  +content: String
+  +category: ForumCategory
+}
+
+class Comment {
+  +id: Long
+  +content: String
+}
+
+class PostReaction {
+  +id: Long
+  +type: ReactionType
+}
+
+' ===== ENUMOK =====
+enum Role
+enum ForumCategory
+enum ReactionType
+enum AppointmentStatus
+
+' ===== KAPCSOLATOK =====
+User "1" --> "*" Car : owns
+User "1" --> "*" Post : creates
+User "1" --> "*" Comment : writes
+User "1" --> "*" ServiceAppointment : books
+User "1" --> "*" ServiceVote : rates
+
+Car "1" --> "*" ServiceAppointment : scheduledFor
+
+ServiceCenter "1" --> "*" ServiceAppointment : provides
+ServiceCenter "1" --> "*" ServiceVote : receives
+
+Post "1" --> "*" Comment : has
+Comment "1" --> "*" PostReaction : gets
+
+' enum kapcsolatok
+User --> Role
+Post --> ForumCategory
+PostReaction --> ReactionType
+ServiceAppointment --> AppointmentStatus
+
+@enduml

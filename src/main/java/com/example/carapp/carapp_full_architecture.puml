@@ -1,0 +1,138 @@
+@startuml
+title CarApp – Backend architektúra (függőleges, olvasható elrendezés)
+
+' === Layout és stílus ===
+skinparam dpi 220
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam classFontSize 11
+skinparam shadowing false
+top to bottom direction
+hide empty members
+
+skinparam packageTitleFontSize 13
+skinparam packageBorderColor #888888
+skinparam nodesep 30
+skinparam ranksep 80
+
+skinparam package {
+    BackgroundColor<<controller>> #E8F1FF
+    BackgroundColor<<dto>> #FFF5E5
+    BackgroundColor<<model>> #E5FFF1
+    BackgroundColor<<repository>> #FFF0F0
+    BackgroundColor<<config>> #F0E5FF
+    BackgroundColor<<security>> #FFE5E5
+    BackgroundColor<<service>> #E9FFE9
+    BackgroundColor<<exception>> #F5E5FF
+}
+
+' === CONFIG ===
+package config <<config>> {
+  class DataSeeder
+  class SecurityConfig
+}
+
+' === SECURITY ===
+package security <<security>> {
+  class JwtAuthFilter
+  class JwtService
+}
+
+' === CONTROLLER ===
+package controller <<controller>> {
+  class AdminController
+  class AuthController
+  class CarController
+  class ForumController
+  class NewsController
+  class PostReactionController
+  class ServiceAppointmentController
+  class ServiceCenterController
+  class UserController
+}
+
+' === DTO ===
+package dto <<dto>> {
+  class AuthResponse
+  class CommentRequest
+  class CommentResponse
+  class LoginRequest
+  class NewsItem
+  class PostRequest
+  class PostResponse
+  class ReactionRequest
+  class ReactionSummary
+  class ServiceCenterRequest
+  class ServiceCenterResponse
+  class ServiceVoteRequest
+  class UserMapper
+  class UserRequest
+  class UserResponse
+}
+
+' === EXCEPTION ===
+package exception <<exception>> {
+  class GlobalExceptionHandler
+}
+
+' === MODEL ===
+package model <<model>> {
+  class AppointmentStatus
+  class Car
+  class Comment
+  class ForumCategory
+  class Post
+  class PostReaction
+  class ReactionType
+  class Role
+  class ServiceAppointment
+  class ServiceCenter
+  class ServiceVote
+  class User
+}
+
+' === REPOSITORY ===
+package repository <<repository>> {
+  class CarRepository
+  class CommentRepository
+  class PostReactionRepository
+  class PostRepository
+  class ServiceAppointmentRepository
+  class ServiceCenterRepository
+  class ServiceVoteRepository
+  class UserRepository
+}
+
+' === SERVICE ===
+package service <<service>> {
+  class CarappApplication
+}
+
+' === KAPCSOLATOK ===
+
+' Biztonság és konfiguráció
+SecurityConfig --> JwtAuthFilter : FilterChain
+JwtAuthFilter --> JwtService : Token kezelés
+DataSeeder --> repository.UserRepository : Alapadatok feltöltése
+
+' Controller ↔ DTO
+controller ..> dto : Request/Response kommunikáció
+controller ..> exception : @ControllerAdvice (globális hibakezelés)
+
+' Repository ↔ Model
+repository ..> model : Adatelérés (JPA entitások)
+
+' Model kapcsolatok (fő logikai vonalak)
+model.User --> model.Car
+model.User --> model.ServiceAppointment
+model.User --> model.Post
+model.Post --> model.Comment
+model.Comment --> model.PostReaction
+model.ServiceCenter --> model.ServiceVote
+model.User --> model.Role
+
+' Main alkalmazás
+service.CarappApplication --> config.SecurityConfig
+service.CarappApplication --> repository.UserRepository
+
+@enduml

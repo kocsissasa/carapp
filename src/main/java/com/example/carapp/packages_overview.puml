@@ -1,0 +1,32 @@
+@startuml
+title CarApp – Csomagszintű áttekintés
+
+skinparam packageStyle rectangle
+skinparam backgroundColor #FFFFFF
+skinparam classFontSize 12
+skinparam ArrowColor #555555
+
+package "config" as pkg_config
+package "controller" as pkg_controller
+package "dto" as pkg_dto
+package "exception" as pkg_exception
+package "model" as pkg_model
+package "repository" as pkg_repository
+package "security" as pkg_security
+package "service" as pkg_service
+
+' fő rétegek közötti irányok
+pkg_controller --> pkg_service : üzleti hívások
+pkg_service --> pkg_repository : adatelérés
+pkg_repository --> pkg_model : JPA entitások
+
+' kiegészítők
+pkg_controller --> pkg_dto : request/response
+pkg_controller --> pkg_exception : globális hibakezelés
+pkg_config --> pkg_security : Bean-ek, filterlánc
+pkg_config --> pkg_repository : JPA/DB beállítások
+pkg_security --> pkg_controller : Auth/JWT ellenőrzés
+pkg_service --> pkg_model
+pkg_config --> pkg_service
+
+@enduml

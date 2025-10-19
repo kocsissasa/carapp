@@ -1,0 +1,49 @@
+@startuml
+title CarApp – DTO-k és globális hibakezelés
+
+skinparam packageStyle rectangle
+skinparam classFontSize 11
+skinparam backgroundColor #FFFFFF
+skinparam linetype ortho
+
+package dto {
+  class AuthResponse
+  class CommentRequest
+  class CommentResponse
+  class LoginRequest
+  class NewsItem
+  class PostRequest
+  class PostResponse
+  class ReactionRequest
+  class ReactionSummary
+  class ServiceCenterRequest
+  class ServiceCenterResponse
+  class ServiceVoteRequest
+  class UserMapper
+  class UserRequest
+  class UserResponse
+}
+
+package exception {
+  class GlobalExceptionHandler
+}
+
+package controller {
+  class AuthController
+  class CarController
+  class ForumController
+  class NewsController
+  class UserController
+}
+
+' ===== Kapcsolatok (példák) =====
+AuthController --> AuthResponse
+AuthController --> LoginRequest
+ForumController --> PostRequest
+ForumController --> PostResponse
+NewsController --> NewsItem
+CarController --> UserRequest
+UserController --> UserResponse
+controller.AuthController --> exception.GlobalExceptionHandler : @ControllerAdvice
+
+@enduml

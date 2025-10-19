@@ -17,7 +17,7 @@ import jakarta.validation.constraints.Size;
 //          Egy felhasználónak több autója, több posztja és több kommentje is lehet.
 
 @Entity
-@Table(name = "users")
+@Table(name = "users") // - > Tábla neve az adatbázisban
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

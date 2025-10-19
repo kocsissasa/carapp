@@ -14,20 +14,20 @@ import jakarta.validation.constraints.NotNull;
  */
 
 @Entity
-@Table(name = "cars")
+@Table(name = "cars") // -> Tábla neve az adatbázisban
 public class Car {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank(message = "Brand is required")
+    @NotBlank(message = "Brand is required")  // -> Kötelező mező
     private String brand;
 
-    @NotBlank(message = "Model is required")
+    @NotBlank(message = "Model is required")  // -> Kötelező mező
     private String model;
 
-    @NotNull(message = "Year is required")
+    @NotNull(message = "Year is required")  // -> Kötelező mező
     private Integer year;
 
     // kapcsolat Userrel: egy usernek több autója lehet
